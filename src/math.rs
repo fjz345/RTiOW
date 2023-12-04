@@ -2,7 +2,7 @@ use std::ops;
 
 type Vec3_InnerType = f64;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct Vec3 {
     pub x: Vec3_InnerType,
     pub y: Vec3_InnerType,
@@ -32,6 +32,13 @@ impl Vec3 {
 
     pub fn len(&self) -> Vec3_InnerType {
         self.len_squared().sqrt()
+    }
+
+    pub fn equal(&self, other: &Self, threshold: Option<f64>) -> bool {
+        let threshold_value = threshold.unwrap_or(0.001);
+        (*self - *other).x.abs() >= threshold_value
+            && (*self - *other).y.abs() >= threshold_value
+            && (*self - *other).z.abs() >= threshold_value
     }
 }
 
@@ -107,6 +114,7 @@ impl ops::Div<Vec3_InnerType> for Vec3 {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
 pub struct Vec4 {
     pub x: Vec3_InnerType,
     pub y: Vec3_InnerType,
@@ -201,16 +209,43 @@ impl ops::Div<Vec3_InnerType> for Vec4 {
     }
 }
 
-pub type Color = Vec4;
+#[rustfmt::skip]
+pub mod Color{
+    use super::Vec4;
 
-impl Color {
-    pub fn to_u8(&self) -> [u8; 4] {
-        let u8_vec: [u8; 4] = [
-            (self.x * 256.0) as u8,
-            (self.y * 256.0) as u8,
-            (self.z * 256.0) as u8,
-            (self.w * 256.0) as u8,
-        ];
-        u8_vec
+    pub type Color = Vec4;
+
+    impl Color {
+        pub fn to_u8(&self) -> [u8; 4] {
+            let u8_vec: [u8; 4] = [
+                (self.x * 256.0) as u8,
+                (self.y * 256.0) as u8,
+                (self.z * 256.0) as u8,
+                (self.w * 256.0) as u8,
+            ];
+            u8_vec
+        }
     }
+
+    pub const BLACK: Color = Color {x: 0.0, y: 0.0, z: 0.0, w: 1.0};
+    pub const WHITE: Color = Color {x: 1.0, y: 1.0, z: 1.0, w: 1.0};
+    pub const TRANSPARENT: Color = Color {x:1.0, y: 1.0, z: 1.0,  w:0.0};
+
+    pub const RED: Color = Color {x: 1.0, y:0.0, z: 0.0,  w:1.0};
+    pub const GREEN: Color = Color {x: 0.0, y:1.0,  z:0.0,  w:1.0};
+    pub const BLUE: Color = Color {x: 0.0, y:0.0, z: 1.0, w: 1.0};
+    pub const YELLOW: Color = Color {x: 1.0, y:1.0, z: 0.0, w: 1.0};
+    pub const PURPLE: Color = Color {x: 1.0, y:0.0,  z:1.0,  w:1.0};
+    pub const TEAL: Color = Color {x: 0.0, y:1.0, z: 1.0,  w:1.0};
+    pub const PINK: Color = Color {x: 1.0, y:0.0,  z:0.672,  w:1.0};
+    pub const ORANGE: Color = Color {x: 1.0, y:0.348, z: 0.0, w: 10.0};
+
+    pub const DARK_RED: Color = Color {x: 0.37, y:0.1, z: 0.1, w: 1.0};
+    pub const DARK_GREEN: Color = Color {x: 0.1, y:0.37,  z:0.1, w: 1.0};
+    pub const DARK_BLUE: Color = Color {x: 0.1, y:0.1,  z:0.37, w: 1.0};
+    pub const DARK_YELLOW: Color = Color {x: 0.37, y:0.37, z: 0.1, w: 1.0};
+    pub const DARK_PURPLE: Color = Color {x: 0.37, y:0.1, z: 0.37, w: 1.0};
+    pub const DARK_TEAL: Color = Color {x: 0.1, y:0.37, z: 0.37,  w:1.0};
+    pub const DARK_PINK: Color = Color {x: 0.37,y: 0.1, z: 0.24,  w:1.0};
+    pub const DARK_ORANGE: Color = Color {x: 0.37, y:0.18, z: 0.1,  w:1.0};
 }

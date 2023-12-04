@@ -1,13 +1,21 @@
 use std::{fs::File, io::Write, process::Output};
 
-use crate::{math::Color, progress_bar::ProgressBar};
+use crate::{math::Color::Color, progress_bar::ProgressBar};
 
 mod math;
 mod progress_bar;
+mod ray;
 
 fn main() {
-    let image_width = 256;
-    let image_height = 256;
+    let aspect_ratio: f64 = 16.0 / 9.0;
+    let image_width: i64 = 800;
+    let image_height: i64 = ((image_width as f64 / aspect_ratio) as i64).max(1);
+    let image_size = (image_width, image_height);
+
+    let viewport_aspectratio = (image_width as f64) / (image_height as f64);
+    let viewport_height = 2.0;
+    let viewport_width = viewport_height * viewport_aspectratio;
+    let viewport_size = (viewport_width, viewport_height);
 
     let mut image_ppm: String = String::new();
     image_ppm += &format!("P3\n{} {}\n255\n", image_width, image_height).to_string();
