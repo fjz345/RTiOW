@@ -1,20 +1,127 @@
 use std::ops;
 
-type Vec3_InnerType = f64;
+type Vec_InnerType = f64;
+
+#[derive(Clone, Copy, PartialEq)]
+pub struct Vec2 {
+    pub x: Vec_InnerType,
+    pub y: Vec_InnerType,
+}
+
+impl From<Vec3> for Vec2 {
+    fn from(vec: Vec3) -> Self {
+        Self { x: vec.x, y: vec.y }
+    }
+}
+
+impl Vec2 {
+    pub fn new(x: Vec_InnerType, y: Vec_InnerType) -> Self {
+        Vec2 { x: x, y: y }
+    }
+
+    pub fn dot(&self, other: Vec2) -> Vec_InnerType {
+        self.x * other.x + self.y * other.y
+    }
+
+    pub fn len_squared(&self) -> Vec_InnerType {
+        self.x * self.x + self.y * self.y
+    }
+
+    pub fn len(&self) -> Vec_InnerType {
+        self.len_squared().sqrt()
+    }
+
+    pub fn normalize(&self) -> Vec2 {
+        *self / self.len()
+    }
+
+    pub fn equal(&self, other: &Self, threshold: Option<f64>) -> bool {
+        let threshold_value = threshold.unwrap_or(0.001);
+        (*self - *other).x.abs() >= threshold_value && (*self - *other).y.abs() >= threshold_value
+    }
+}
+
+impl ops::Add<Vec2> for Vec2 {
+    type Output = Self;
+    fn add(self, _rhs: Vec2) -> Self {
+        Self {
+            x: self.x + _rhs.x,
+            y: self.y + _rhs.y,
+        }
+    }
+}
+
+impl ops::Add<Vec_InnerType> for Vec2 {
+    type Output = Self;
+    fn add(self, _rhs: Vec_InnerType) -> Self {
+        self.add(Vec2::new(_rhs, _rhs))
+    }
+}
+
+impl ops::Sub<Vec2> for Vec2 {
+    type Output = Self;
+    fn sub(self, _rhs: Vec2) -> Self {
+        Self {
+            x: self.x - _rhs.x,
+            y: self.y - _rhs.y,
+        }
+    }
+}
+
+impl ops::Sub<Vec_InnerType> for Vec2 {
+    type Output = Self;
+    fn sub(self, _rhs: Vec_InnerType) -> Self {
+        self.sub(Vec2::new(_rhs, _rhs))
+    }
+}
+
+impl ops::Mul<Vec2> for Vec2 {
+    type Output = Self;
+    fn mul(self, _rhs: Vec2) -> Self {
+        Self {
+            x: self.x * _rhs.x,
+            y: self.y * _rhs.y,
+        }
+    }
+}
+
+impl ops::Mul<Vec_InnerType> for Vec2 {
+    type Output = Self;
+    fn mul(self, _rhs: Vec_InnerType) -> Self {
+        self.mul(Vec2::new(_rhs, _rhs))
+    }
+}
+
+impl ops::Div<Vec2> for Vec2 {
+    type Output = Self;
+    fn div(self, _rhs: Vec2) -> Self {
+        Self {
+            x: self.x / _rhs.x,
+            y: self.y / _rhs.y,
+        }
+    }
+}
+
+impl ops::Div<Vec_InnerType> for Vec2 {
+    type Output = Self;
+    fn div(self, _rhs: Vec_InnerType) -> Self {
+        self.div(Vec2::new(_rhs, _rhs))
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct Vec3 {
-    pub x: Vec3_InnerType,
-    pub y: Vec3_InnerType,
-    pub z: Vec3_InnerType,
+    pub x: Vec_InnerType,
+    pub y: Vec_InnerType,
+    pub z: Vec_InnerType,
 }
 
 impl Vec3 {
-    pub fn new(x: Vec3_InnerType, y: Vec3_InnerType, z: Vec3_InnerType) -> Self {
+    pub fn new(x: Vec_InnerType, y: Vec_InnerType, z: Vec_InnerType) -> Self {
         Vec3 { x: x, y: y, z: z }
     }
 
-    pub fn dot(&self, other: Vec3) -> Vec3_InnerType {
+    pub fn dot(&self, other: Vec3) -> Vec_InnerType {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
@@ -26,12 +133,16 @@ impl Vec3 {
         }
     }
 
-    pub fn len_squared(&self) -> Vec3_InnerType {
+    pub fn len_squared(&self) -> Vec_InnerType {
         self.x * self.x + self.y * self.y + self.z * self.z
     }
 
-    pub fn len(&self) -> Vec3_InnerType {
+    pub fn len(&self) -> Vec_InnerType {
         self.len_squared().sqrt()
+    }
+
+    pub fn normalize(&self) -> Vec3 {
+        *self / self.len().max(0.0001)
     }
 
     pub fn equal(&self, other: &Self, threshold: Option<f64>) -> bool {
@@ -53,9 +164,9 @@ impl ops::Add<Vec3> for Vec3 {
     }
 }
 
-impl ops::Add<Vec3_InnerType> for Vec3 {
+impl ops::Add<Vec_InnerType> for Vec3 {
     type Output = Self;
-    fn add(self, _rhs: Vec3_InnerType) -> Self {
+    fn add(self, _rhs: Vec_InnerType) -> Self {
         self.add(Vec3::new(_rhs, _rhs, _rhs))
     }
 }
@@ -71,9 +182,9 @@ impl ops::Sub<Vec3> for Vec3 {
     }
 }
 
-impl ops::Sub<Vec3_InnerType> for Vec3 {
+impl ops::Sub<Vec_InnerType> for Vec3 {
     type Output = Self;
-    fn sub(self, _rhs: Vec3_InnerType) -> Self {
+    fn sub(self, _rhs: Vec_InnerType) -> Self {
         self.sub(Vec3::new(_rhs, _rhs, _rhs))
     }
 }
@@ -89,9 +200,9 @@ impl ops::Mul<Vec3> for Vec3 {
     }
 }
 
-impl ops::Mul<Vec3_InnerType> for Vec3 {
+impl ops::Mul<Vec_InnerType> for Vec3 {
     type Output = Self;
-    fn mul(self, _rhs: Vec3_InnerType) -> Self {
+    fn mul(self, _rhs: Vec_InnerType) -> Self {
         self.mul(Vec3::new(_rhs, _rhs, _rhs))
     }
 }
@@ -107,23 +218,23 @@ impl ops::Div<Vec3> for Vec3 {
     }
 }
 
-impl ops::Div<Vec3_InnerType> for Vec3 {
+impl ops::Div<Vec_InnerType> for Vec3 {
     type Output = Self;
-    fn div(self, _rhs: Vec3_InnerType) -> Self {
+    fn div(self, _rhs: Vec_InnerType) -> Self {
         self.div(Vec3::new(_rhs, _rhs, _rhs))
     }
 }
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct Vec4 {
-    pub x: Vec3_InnerType,
-    pub y: Vec3_InnerType,
-    pub z: Vec3_InnerType,
-    pub w: Vec3_InnerType,
+    pub x: Vec_InnerType,
+    pub y: Vec_InnerType,
+    pub z: Vec_InnerType,
+    pub w: Vec_InnerType,
 }
 
 impl Vec4 {
-    pub fn new(x: Vec3_InnerType, y: Vec3_InnerType, z: Vec3_InnerType, w: Vec3_InnerType) -> Self {
+    pub fn new(x: Vec_InnerType, y: Vec_InnerType, z: Vec_InnerType, w: Vec_InnerType) -> Self {
         Self {
             x: x,
             y: y,
@@ -145,9 +256,9 @@ impl ops::Add<Vec4> for Vec4 {
     }
 }
 
-impl ops::Add<Vec3_InnerType> for Vec4 {
+impl ops::Add<Vec_InnerType> for Vec4 {
     type Output = Self;
-    fn add(self, _rhs: Vec3_InnerType) -> Self {
+    fn add(self, _rhs: Vec_InnerType) -> Self {
         self.add(Vec4::new(_rhs, _rhs, _rhs, _rhs))
     }
 }
@@ -164,9 +275,9 @@ impl ops::Sub<Vec4> for Vec4 {
     }
 }
 
-impl ops::Sub<Vec3_InnerType> for Vec4 {
+impl ops::Sub<Vec_InnerType> for Vec4 {
     type Output = Self;
-    fn sub(self, _rhs: Vec3_InnerType) -> Self {
+    fn sub(self, _rhs: Vec_InnerType) -> Self {
         self.sub(Vec4::new(_rhs, _rhs, _rhs, _rhs))
     }
 }
@@ -183,9 +294,9 @@ impl ops::Mul<Vec4> for Vec4 {
     }
 }
 
-impl ops::Mul<Vec3_InnerType> for Vec4 {
+impl ops::Mul<Vec_InnerType> for Vec4 {
     type Output = Self;
-    fn mul(self, _rhs: Vec3_InnerType) -> Self {
+    fn mul(self, _rhs: Vec_InnerType) -> Self {
         self.mul(Vec4::new(_rhs, _rhs, _rhs, _rhs))
     }
 }
@@ -202,9 +313,9 @@ impl ops::Div<Vec4> for Vec4 {
     }
 }
 
-impl ops::Div<Vec3_InnerType> for Vec4 {
+impl ops::Div<Vec_InnerType> for Vec4 {
     type Output = Self;
-    fn div(self, _rhs: Vec3_InnerType) -> Self {
+    fn div(self, _rhs: Vec_InnerType) -> Self {
         self.div(Vec4::new(_rhs, _rhs, _rhs, _rhs))
     }
 }

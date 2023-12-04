@@ -18,6 +18,8 @@ impl Ray {
     }
 
     pub fn ray_color(&self) -> Color {
-        BLACK
+        let unit_dir = self.direction.normalize();
+        let a = (unit_dir.y + 1.0) * 0.5;
+        Color::new(1.0, 1.0, 1.0, 1.0) * (1.0 - a) + Color::new(0.5, 0.7, 1.0, 1.0) * a
     }
 }
