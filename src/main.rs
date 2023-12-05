@@ -1,7 +1,7 @@
 use std::{fs::File, io::Write, process::Output};
 
 use crate::{
-    math::{Color::Color, Vec2, Vec3},
+    math::{color::Color, Vec2, Vec3},
     progress_bar::ProgressBar,
     ray::Ray,
 };

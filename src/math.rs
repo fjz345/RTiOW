@@ -321,7 +321,7 @@ impl ops::Div<Vec_InnerType> for Vec4 {
 }
 
 #[rustfmt::skip]
-pub mod Color{
+pub mod color{
     use super::Vec4;
 
     pub type Color = Vec4;
