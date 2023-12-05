@@ -14,7 +14,7 @@ impl ProgressBar {
     }
 
     pub fn progress(&self) -> f64 {
-        (self.progress / self.progress_max)
+        self.progress / self.progress_max
     }
 
     pub fn progress_precent(&self) -> f64 {

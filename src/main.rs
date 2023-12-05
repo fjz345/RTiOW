@@ -3,7 +3,7 @@ use std::{fs::File, io::Write, process::Output};
 use crate::{
     math::{color::Color, Vec2, Vec3},
     progress_bar::ProgressBar,
-    ray::Ray,
+    ray::{Hittable, HittableList, Ray, Sphere},
 };
 
 mod camera;
@@ -13,14 +13,39 @@ mod ray;
 
 fn main() {
     let aspect_ratio: f64 = 16.0 / 9.0;
-    let image_width: i64 = 800;
+    let image_width: i64 = 400;
     let image_height: i64 = ((image_width as f64 / aspect_ratio) as i64).max(1);
     let image_size = (image_width, image_height);
+
+    let mut progress_bar: ProgressBar = ProgressBar::new((image_width * image_height) as f64, 20);
+
+    let mut image_ppm: String = String::new();
+    image_ppm += &format!("P3\n{} {}\n255\n", image_width, image_height).to_string();
+
+    let mut world: HittableList = HittableList::new();
+    let hittable_circle: Box<dyn Hittable> = Box::new(Sphere {
+        center: Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: -1.0,
+        },
+        radius: 0.5,
+    });
+    let hittable_ground: Box<dyn Hittable> = Box::new(Sphere {
+        center: Vec3 {
+            x: 0.0,
+            y: -100.5,
+            z: -1.0,
+        },
+        radius: 100.0,
+    });
+    world.add_hittable(&hittable_circle);
+    world.add_hittable(&hittable_ground);
 
     let viewport_aspectratio = (image_width as f64) / (image_height as f64);
     let viewport_height = 2.0;
     let viewport_width = viewport_height * viewport_aspectratio;
-    let viewport_size = (viewport_width, viewport_height);
+    let viewport_size: (f64, f64) = (viewport_width, viewport_height);
 
     let mut camera_center = Vec3::new(0.0, 0.0, 0.0);
     let mut focal_length = 1.0;
@@ -28,30 +53,22 @@ fn main() {
     let viewport_u = Vec3::new(viewport_width, 0.0, 0.0);
     let viewport_v = Vec3::new(0.0, -viewport_height, 0.0);
 
-    let pixel_delta_u: Vec3 = (viewport_u / image_width as f64).into();
-    let pixel_delta_v: Vec3 = (viewport_v / image_height as f64).into();
+    let pixel_delta_u: Vec3 = (viewport_u / image_width as f64);
+    let pixel_delta_v: Vec3 = (viewport_v / image_height as f64);
 
     let viewport_upper_left =
         camera_center - Vec3::new(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
     let pixel00_loc: Vec3 = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
 
-    let mut image_ppm: String = String::new();
-    image_ppm += &format!("P3\n{} {}\n255\n", image_width, image_height).to_string();
-
-    let mut progress_bar: ProgressBar = ProgressBar::new((image_width * image_height) as f64, 20);
     for y in 0..image_height {
         for x in 0..image_width {
             let mut pixel_center: Vec3 =
                 pixel00_loc + (pixel_delta_u * x as f64) + (pixel_delta_v * y as f64);
-            let mut pixel_dir = pixel_center - camera_center;
+            let mut pixel_dir = (pixel_center - camera_center);
 
             let ray: Ray = Ray::new(pixel_center, pixel_dir);
 
-            // let r = x as f64 / (image_width - 1) as f64;
-            // let g = y as f64 / (image_height - 1) as f64;
-            // let b = 0.0_f64;
-
-            let texel_color: Color = ray.ray_color();
+            let texel_color: Color = ray.ray_color(&world);
             let texel_color_u8 = texel_color.to_u8();
 
             let ir = texel_color_u8[0];

@@ -1,4 +1,16 @@
-use std::ops;
+use std::ops::{self, Neg};
+
+pub mod math {
+    const PI: f64 = 3.1415926535897932385;
+
+    pub fn deg_to_rad(deg: f64) -> f64 {
+        deg * PI / 180.0
+    }
+
+    pub fn rad_to_deg(rad: f64) -> f64 {
+        (rad * 180.0) / PI
+    }
+}
 
 type Vec_InnerType = f64;
 
@@ -24,7 +36,7 @@ impl Vec2 {
     }
 
     pub fn len_squared(&self) -> Vec_InnerType {
-        self.x * self.x + self.y * self.y
+        self.dot(*self)
     }
 
     pub fn len(&self) -> Vec_InnerType {
@@ -32,7 +44,7 @@ impl Vec2 {
     }
 
     pub fn normalize(&self) -> Vec2 {
-        *self / self.len()
+        *self / (self.len().max(0.0001))
     }
 
     pub fn equal(&self, other: &Self, threshold: Option<f64>) -> bool {
@@ -109,7 +121,15 @@ impl ops::Div<Vec_InnerType> for Vec2 {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+impl ops::Neg for Vec2 {
+    type Output = Self;
+
+    fn neg(self) -> Self {
+        self * -1.0
+    }
+}
+
+#[derive(Clone, Copy, Default)]
 pub struct Vec3 {
     pub x: Vec_InnerType,
     pub y: Vec_InnerType,
@@ -134,7 +154,7 @@ impl Vec3 {
     }
 
     pub fn len_squared(&self) -> Vec_InnerType {
-        self.x * self.x + self.y * self.y + self.z * self.z
+        self.dot(*self)
     }
 
     pub fn len(&self) -> Vec_InnerType {
@@ -142,7 +162,7 @@ impl Vec3 {
     }
 
     pub fn normalize(&self) -> Vec3 {
-        *self / self.len().max(0.0001)
+        *self / (self.len().max(0.0001))
     }
 
     pub fn equal(&self, other: &Self, threshold: Option<f64>) -> bool {
@@ -222,6 +242,14 @@ impl ops::Div<Vec_InnerType> for Vec3 {
     type Output = Self;
     fn div(self, _rhs: Vec_InnerType) -> Self {
         self.div(Vec3::new(_rhs, _rhs, _rhs))
+    }
+}
+
+impl ops::Neg for Vec3 {
+    type Output = Self;
+
+    fn neg(self) -> Self {
+        self * -1.0
     }
 }
 
@@ -317,6 +345,14 @@ impl ops::Div<Vec_InnerType> for Vec4 {
     type Output = Self;
     fn div(self, _rhs: Vec_InnerType) -> Self {
         self.div(Vec4::new(_rhs, _rhs, _rhs, _rhs))
+    }
+}
+
+impl ops::Neg for Vec4 {
+    type Output = Self;
+
+    fn neg(self) -> Self {
+        self * -1.0
     }
 }
 
