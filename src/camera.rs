@@ -145,7 +145,7 @@ impl Camera {
         if world.hit(
             ray,
             Interval {
-                min: 0.0,
+                min: 0.0001,
                 max: INFINITY,
             },
             &mut hit_result,
