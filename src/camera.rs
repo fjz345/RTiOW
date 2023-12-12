@@ -1,10 +1,11 @@
-use std::{f32::INFINITY, fs::File, io::Write};
+use std::{default, f32::INFINITY, fs::File, io::Write};
 
 use palette::{Clamp, Srgb, Srgba};
 
 use crate::{
     color::{color::*, Color},
     interval::Interval,
+    material::scatter,
     math::{
         math::{rand_f32, rand_f32_range, rand_on_hemisphere, rand_unit_vector},
         Vec3, Vec4,
@@ -152,9 +153,18 @@ impl Camera {
             },
             &mut hit_result,
         ) {
-            let direction = hit_result.normal + rand_unit_vector();
-            let col = Self::ray_color(&Ray::new(hit_result.location, direction), depth - 1, world);
-            return Color::new(col.red * 0.5, col.green * 0.5, col.blue * 0.5, 1.0);
+            let mut scattererd: Ray = Ray::default();
+            let mut attenuation: Color = Color::default();
+            if scatter(
+                hit_result.material_id,
+                ray,
+                &hit_result,
+                &mut attenuation,
+                &mut scattererd,
+            ) {
+                return attenuation * Self::ray_color(&scattererd, depth - 1, world);
+            }
+            return Color::new(0.0, 0.0, 0.0, 0.0);
         }
 
         // BG

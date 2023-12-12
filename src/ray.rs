@@ -5,6 +5,7 @@ use glam::Vec3;
 
 use crate::color::Color;
 
+#[derive(Default)]
 pub struct Ray {
     pub origin: Vec3,
     pub direction: Vec3,
@@ -29,6 +30,7 @@ pub struct HitResult {
     pub normal: Vec3,
     pub t: f32,
     pub front_face: bool,
+    pub material_id: i32,
 }
 
 impl HitResult {
@@ -57,6 +59,7 @@ impl Clone for Box<dyn Hittable> {
 pub struct Sphere {
     pub center: Vec3,
     pub radius: f32,
+    pub material_id: i32,
 }
 
 impl Hittable for Sphere {
@@ -88,6 +91,7 @@ impl Hittable for Sphere {
         }
         t = t0.min(t1);
 
+        hit_result.material_id = self.material_id;
         hit_result.t = t;
         hit_result.location = ray.at(hit_result.t);
         hit_result.normal = (hit_result.location - self.center) / self.radius;

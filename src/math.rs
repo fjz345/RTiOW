@@ -15,6 +15,15 @@ pub mod math {
         (rad * 180.0) / PI
     }
 
+    pub fn reflect(vec: Vec3, n: Vec3) -> Vec3 {
+        vec - 2.0 * vec.dot(n) * n
+    }
+
+    pub fn near_zero_vec3(vec: Vec3) -> bool {
+        const s: f32 = 1e-8;
+        vec[0].abs() < s && vec[1].abs() < s && vec[2].abs() < s
+    }
+
     pub fn rand_f32() -> f32 {
         let mut rng = rand::thread_rng();
         let r: f32 = rng.gen();

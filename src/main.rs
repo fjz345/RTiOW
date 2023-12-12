@@ -12,6 +12,7 @@ use crate::{
 mod camera;
 mod color;
 mod interval;
+mod material;
 mod math;
 mod progress_bar;
 mod ray;
@@ -31,6 +32,16 @@ fn main() {
             z: -1.0,
         },
         radius: 0.5,
+        material_id: 1,
+    });
+    let hittable_circle2: Box<dyn Hittable> = Box::new(Sphere {
+        center: Vec3 {
+            x: 1.2,
+            y: 0.0,
+            z: -1.7,
+        },
+        radius: 0.3,
+        material_id: 2,
     });
     let hittable_ground: Box<dyn Hittable> = Box::new(Sphere {
         center: Vec3 {
@@ -39,8 +50,10 @@ fn main() {
             z: -1.0,
         },
         radius: 100.0,
+        material_id: 1,
     });
     world.add_hittable(hittable_circle);
+    world.add_hittable(hittable_circle2);
     world.add_hittable(hittable_ground);
 
     camera.render(&world);
