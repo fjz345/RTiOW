@@ -21,34 +21,14 @@ impl Ray {
     pub fn at(&self, t: f32) -> Vec3 {
         self.origin + self.direction * t
     }
-
-    pub fn ray_color(&self, world: &HittableList) -> Color {
-        let mut hit_result: HitResult = HitResult::default();
-        if world.hit(
-            self,
-            Interval {
-                min: 0.0,
-                max: INFINITY,
-            },
-            &mut hit_result,
-        ) {
-            let col = (hit_result.normal + Vec3::new(1.0, 1.0, 1.0)) * 0.5;
-            return Color::new(col.x, col.y, col.z, 1.0);
-        }
-
-        // BG
-        let unit_dir = self.direction.normalize();
-        let a = (unit_dir.y + 1.0) * 0.5;
-        Color::new(1.0, 1.0, 1.0, 1.0) * (1.0 - a) + Color::new(0.5, 0.7, 1.0, 1.0) * a
-    }
 }
 
 #[derive(Clone, Copy, Default)]
 pub struct HitResult {
-    location: Vec3,
-    normal: Vec3,
-    t: f32,
-    front_face: bool,
+    pub location: Vec3,
+    pub normal: Vec3,
+    pub t: f32,
+    pub front_face: bool,
 }
 
 impl HitResult {
