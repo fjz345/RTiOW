@@ -26,10 +26,14 @@ pub fn scatter(
         *attenuation = albedo;
         return true;
     } else if (material_id == MATERIAL_METAL) {
+        let fuzz_amount: f32 = 0.3;
         let reflected = reflect(ray.direction.normalize(), hit_result.normal);
-        *scattered_ray = Ray::new(hit_result.location, reflected);
+        *scattered_ray = Ray::new(
+            hit_result.location,
+            reflected + fuzz_amount * rand_unit_vector(),
+        );
         *attenuation = albedo;
-        return true;
+        return scattered_ray.direction.dot(hit_result.normal) > 0.0;
     }
 
     return false;
