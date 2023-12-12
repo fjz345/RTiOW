@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 glam = "0.24.2"
 palette = "0.7.3"
+rand = "0.8.5"
