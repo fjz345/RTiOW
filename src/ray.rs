@@ -1,5 +1,6 @@
-use std::{default, mem::Discriminant, ops::DerefMut};
+use std::{default, f32::INFINITY, mem::Discriminant, ops::DerefMut};
 
+use crate::interval::Interval;
 use glam::Vec3;
 
 use crate::color::Color;
@@ -23,7 +24,14 @@ impl Ray {
 
     pub fn ray_color(&self, world: &HittableList) -> Color {
         let mut hit_result: HitResult = HitResult::default();
-        if world.hit(self, 0.0, 1000.0, &mut hit_result) {
+        if world.hit(
+            self,
+            Interval {
+                min: 0.0,
+                max: INFINITY,
+            },
+            &mut hit_result,
+        ) {
             let col = (hit_result.normal + Vec3::new(1.0, 1.0, 1.0)) * 0.5;
             return Color::new(col.x, col.y, col.z, 1.0);
         }
@@ -55,7 +63,7 @@ impl HitResult {
 }
 
 pub trait Hittable {
-    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32, hit_result: &mut HitResult) -> bool;
+    fn hit(&self, ray: &Ray, interval: Interval, hit_result: &mut HitResult) -> bool;
     fn clone_dyn(&self) -> Box<dyn Hittable>;
 }
 
@@ -76,7 +84,7 @@ impl Hittable for Sphere {
         Box::new(self.clone())
     }
 
-    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32, hit_result: &mut HitResult) -> bool {
+    fn hit(&self, ray: &Ray, interval: Interval, hit_result: &mut HitResult) -> bool {
         let oc: Vec3 = ray.origin - self.center;
         let a: f32 = ray.direction.length_squared();
         let half_b = oc.dot(ray.direction);
@@ -92,9 +100,9 @@ impl Hittable for Sphere {
         let t1: f32 = (-half_b + discriminant_sqrt) / a;
         let mut t = t1;
 
-        if t <= t_min || t_max <= t {
+        if !interval.surrounds(t) {
             t = t0;
-            if t <= t_min || t_max <= t {
+            if !interval.surrounds(t) {
                 return false;
             }
         }
@@ -126,13 +134,20 @@ impl HittableList {
         self.list.clear();
     }
 
-    pub fn hit(&self, ray: &Ray, t_min: f32, t_max: f32, hit_result: &mut HitResult) -> bool {
+    pub fn hit(&self, ray: &Ray, interval: Interval, hit_result: &mut HitResult) -> bool {
         let mut temp_hit_result: HitResult = HitResult::default();
         let mut hit = false;
-        let mut closest_so_far = t_max;
+        let mut closest_so_far = interval.max;
 
         for object in self.list.iter() {
-            if object.hit(ray, t_min, closest_so_far, &mut temp_hit_result) {
+            if object.hit(
+                ray,
+                Interval {
+                    min: interval.min,
+                    max: closest_so_far,
+                },
+                &mut temp_hit_result,
+            ) {
                 hit = true;
                 closest_so_far = temp_hit_result.t;
                 *hit_result = temp_hit_result;

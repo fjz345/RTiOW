@@ -10,6 +10,7 @@ use crate::{
 
 mod camera;
 mod color;
+mod interval;
 mod math;
 mod progress_bar;
 mod ray;
