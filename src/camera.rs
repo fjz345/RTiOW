@@ -6,7 +6,7 @@ use crate::{
     color::{color::color_to_u8, Color},
     interval::Interval,
     math::{
-        math::{rand_f32, rand_f32_range, rand_on_hemisphere},
+        math::{rand_f32, rand_f32_range, rand_on_hemisphere, rand_unit_vector},
         Vec3, Vec4,
     },
     progress_bar::ProgressBar,
@@ -150,7 +150,7 @@ impl Camera {
             },
             &mut hit_result,
         ) {
-            let direction = rand_on_hemisphere(hit_result.normal);
+            let direction = hit_result.normal + rand_unit_vector();
             let col = Self::ray_color(&Ray::new(hit_result.location, direction), depth - 1, world);
             return Color::new(col.red * 0.5, col.green * 0.5, col.blue * 0.5, 1.0);
         }
