@@ -4,9 +4,30 @@ pub type Color = palette::LinSrgba;
 
 #[rustfmt::skip]
 pub mod color{
+    use palette::{Srgb, Srgba};
+
     use super::Color;
 
     pub fn color_to_u8(color: &Color) -> [u8; 4] {
+        let u8_vec: [u8; 4] = [
+            (color.red * 256.0) as u8,
+            (color.green * 256.0) as u8,
+            (color.blue * 256.0) as u8,
+            (color.alpha * 256.0) as u8,
+        ];
+        u8_vec
+    }
+
+    pub fn color_to_u8_srgb(color: &Srgb) -> [u8; 3] {
+        let u8_vec: [u8; 3] = [
+            (color.red * 256.0) as u8,
+            (color.green * 256.0) as u8,
+            (color.blue * 256.0) as u8,
+        ];
+        u8_vec
+    }
+
+    pub fn color_to_u8_srgba(color: &Srgba) -> [u8; 4] {
         let u8_vec: [u8; 4] = [
             (color.red * 256.0) as u8,
             (color.green * 256.0) as u8,

@@ -1,9 +1,9 @@
 use std::{f32::INFINITY, fs::File, io::Write};
 
-use palette::Clamp;
+use palette::{Clamp, Srgb, Srgba};
 
 use crate::{
-    color::{color::color_to_u8, Color},
+    color::{color::*, Color},
     interval::Interval,
     math::{
         math::{rand_f32, rand_f32_range, rand_on_hemisphere, rand_unit_vector},
@@ -122,7 +122,9 @@ impl Camera {
             },
             alpha: 1.0,
         };
-        let texel_color_u8 = color_to_u8(&scaled_texel_color.clamp());
+
+        let gamma_corrected: Srgba = scaled_texel_color.clamp().into();
+        let texel_color_u8 = color_to_u8_srgba(&gamma_corrected);
 
         let ir = texel_color_u8[0];
         let ig = texel_color_u8[1];
