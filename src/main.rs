@@ -20,7 +20,8 @@ fn main() {
     let mut camera: Camera = Camera::default();
     camera.aspect_ratio = 16.0 / 9.0;
     camera.image_width = 400;
-    camera.samples_per_pixel = 4;
+    camera.samples_per_pixel = 20;
+    camera.max_ray_per_pixel = 10;
 
     let mut world: HittableList = HittableList::new();
     let hittable_circle: Box<dyn Hittable> = Box::new(Sphere {

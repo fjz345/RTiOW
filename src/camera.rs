@@ -6,7 +6,7 @@ use crate::{
     color::{color::color_to_u8, Color},
     interval::Interval,
     math::{
-        math::{rand_f32, rand_f32_range},
+        math::{rand_f32, rand_f32_range, rand_on_hemisphere},
         Vec3, Vec4,
     },
     progress_bar::ProgressBar,
@@ -20,6 +20,7 @@ pub struct Camera {
     pub aspect_ratio: f32,
     pub image_width: i32,
     pub samples_per_pixel: i32,
+    pub max_ray_per_pixel: i32,
 
     image_height: i32,
     image_size: [i32; 2],
@@ -43,6 +44,7 @@ impl Camera {
             aspect_ratio: 1.0,
             image_width: 100,
             samples_per_pixel: 1,
+            max_ray_per_pixel: 3,
             image_height: 0,
             image_size: [0, 0],
             pixel_delta_u: Vec3::new(0.0, 0.0, 0.0),
@@ -84,7 +86,7 @@ impl Camera {
                 for aa in 0..self.samples_per_pixel {
                     let ray: Ray = self.get_ray(x, y);
 
-                    let texel_color: Color = Self::ray_color(&ray, &world);
+                    let texel_color: Color = Self::ray_color(&ray, self.max_ray_per_pixel, &world);
                     sum_texel_color += texel_color;
                 }
                 Self::write_color(&mut image_ppm, sum_texel_color, self.samples_per_pixel);
@@ -134,7 +136,11 @@ impl Camera {
         *accum_string_file += &'\n'.to_string();
     }
 
-    fn ray_color(ray: &Ray, world: &HittableList) -> Color {
+    fn ray_color(ray: &Ray, depth: i32, world: &HittableList) -> Color {
+        if (depth <= 0) {
+            return Color::new(0.0, 0.0, 0.0, 0.0);
+        }
+
         let mut hit_result: HitResult = HitResult::default();
         if world.hit(
             ray,
@@ -144,8 +150,9 @@ impl Camera {
             },
             &mut hit_result,
         ) {
-            let col = (hit_result.normal + Vec3::new(1.0, 1.0, 1.0)) * 0.5;
-            return Color::new(col.x, col.y, col.z, 1.0);
+            let direction = rand_on_hemisphere(hit_result.normal);
+            let col = Self::ray_color(&Ray::new(hit_result.location, direction), depth - 1, world);
+            return Color::new(col.red * 0.5, col.green * 0.5, col.blue * 0.5, 1.0);
         }
 
         // BG
