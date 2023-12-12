@@ -1,12 +1,15 @@
 use std::{fs::File, io::Write, process::Output};
 
+use glam::Vec3;
+
 use crate::{
-    math::{color::Color, Vec2, Vec3},
+    color::{color::color_to_u8, Color},
     progress_bar::ProgressBar,
     ray::{Hittable, HittableList, Ray, Sphere},
 };
 
 mod camera;
+mod color;
 mod math;
 mod progress_bar;
 mod ray;
@@ -50,11 +53,11 @@ fn main() {
     let mut camera_center = Vec3::new(0.0, 0.0, 0.0);
     let mut focal_length = 1.0;
 
-    let viewport_u = Vec3::new(viewport_width, 0.0, 0.0);
-    let viewport_v = Vec3::new(0.0, -viewport_height, 0.0);
+    let viewport_u = Vec3::new(viewport_width as f32, 0.0, 0.0);
+    let viewport_v = Vec3::new(0.0, -viewport_height as f32, 0.0);
 
-    let pixel_delta_u: Vec3 = (viewport_u / image_width as f64);
-    let pixel_delta_v: Vec3 = (viewport_v / image_height as f64);
+    let pixel_delta_u: Vec3 = viewport_u / image_width as f32;
+    let pixel_delta_v: Vec3 = viewport_v / image_height as f32;
 
     let viewport_upper_left =
         camera_center - Vec3::new(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
@@ -62,14 +65,14 @@ fn main() {
 
     for y in 0..image_height {
         for x in 0..image_width {
-            let mut pixel_center: Vec3 =
-                pixel00_loc + (pixel_delta_u * x as f64) + (pixel_delta_v * y as f64);
-            let mut pixel_dir = (pixel_center - camera_center);
+            let pixel_center: Vec3 =
+                pixel00_loc + (pixel_delta_u * x as f32) + (pixel_delta_v * y as f32);
+            let pixel_dir = (pixel_center - camera_center);
 
             let ray: Ray = Ray::new(pixel_center, pixel_dir);
 
             let texel_color: Color = ray.ray_color(&world);
-            let texel_color_u8 = texel_color.to_u8();
+            let texel_color_u8 = color_to_u8(&texel_color);
 
             let ir = texel_color_u8[0];
             let ig = texel_color_u8[1];

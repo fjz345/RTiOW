@@ -1,9 +1,8 @@
 use std::{default, mem::Discriminant, ops::DerefMut};
 
-use crate::math::{
-    color::{self, Color},
-    Vec3,
-};
+use glam::Vec3;
+
+use crate::color::Color;
 
 pub struct Ray {
     pub origin: Vec3,
@@ -18,7 +17,7 @@ impl Ray {
         }
     }
 
-    pub fn at(&self, t: f64) -> Vec3 {
+    pub fn at(&self, t: f32) -> Vec3 {
         self.origin + self.direction * t
     }
 
@@ -40,7 +39,7 @@ impl Ray {
 pub struct HitResult {
     location: Vec3,
     normal: Vec3,
-    t: f64,
+    t: f32,
     front_face: bool,
 }
 
@@ -56,7 +55,7 @@ impl HitResult {
 }
 
 pub trait Hittable {
-    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64, hit_result: &mut HitResult) -> bool;
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32, hit_result: &mut HitResult) -> bool;
     fn clone_dyn(&self) -> Box<dyn Hittable>;
 }
 
@@ -69,7 +68,7 @@ impl Clone for Box<dyn Hittable> {
 #[derive(Clone)]
 pub struct Sphere {
     pub center: Vec3,
-    pub radius: f64,
+    pub radius: f32,
 }
 
 impl Hittable for Sphere {
@@ -77,11 +76,11 @@ impl Hittable for Sphere {
         Box::new(self.clone())
     }
 
-    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64, hit_result: &mut HitResult) -> bool {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32, hit_result: &mut HitResult) -> bool {
         let oc: Vec3 = ray.origin - self.center;
-        let a: f64 = ray.direction.len_squared();
+        let a: f32 = ray.direction.length_squared();
         let half_b = oc.dot(ray.direction);
-        let c = oc.len_squared() - self.radius * self.radius;
+        let c = oc.length_squared() - self.radius * self.radius;
         let discriminant = half_b * half_b - a * c;
 
         if discriminant < 0.0 {
@@ -89,8 +88,8 @@ impl Hittable for Sphere {
         }
         let discriminant_sqrt = discriminant.sqrt();
 
-        let t0: f64 = (-half_b - discriminant_sqrt) / a;
-        let t1: f64 = (-half_b + discriminant_sqrt) / a;
+        let t0: f32 = (-half_b - discriminant_sqrt) / a;
+        let t1: f32 = (-half_b + discriminant_sqrt) / a;
         let mut t = t1;
 
         if t <= t_min || t_max <= t {
@@ -127,7 +126,7 @@ impl HittableList {
         self.list.clear();
     }
 
-    pub fn hit(&self, ray: &Ray, t_min: f64, t_max: f64, hit_result: &mut HitResult) -> bool {
+    pub fn hit(&self, ray: &Ray, t_min: f32, t_max: f32, hit_result: &mut HitResult) -> bool {
         let mut temp_hit_result: HitResult = HitResult::default();
         let mut hit = false;
         let mut closest_so_far = t_max;
