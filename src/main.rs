@@ -42,8 +42,8 @@ fn main() {
         },
         radius: 100.0,
     });
-    world.add_hittable(&hittable_circle);
-    world.add_hittable(&hittable_ground);
+    world.add_hittable(hittable_circle);
+    world.add_hittable(hittable_ground);
 
     let viewport_aspectratio = (image_width as f64) / (image_height as f64);
     let viewport_height = 2.0;

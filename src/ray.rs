@@ -118,8 +118,8 @@ impl HittableList {
         Self { list: Vec::new() }
     }
 
-    pub fn add_hittable(&mut self, hittable: &Box<dyn Hittable>) {
-        self.list.push(hittable.clone());
+    pub fn add_hittable(&mut self, hittable: Box<dyn Hittable>) {
+        self.list.push(hittable);
     }
 
     pub fn clear(&mut self) {
