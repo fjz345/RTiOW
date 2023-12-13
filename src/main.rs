@@ -17,13 +17,22 @@ mod progress_bar;
 mod random;
 mod ray;
 
+/* TODO:
+plane intersection (ground)
+set generated circles to ground
+avoid spawning close to camera
+*/
+
 fn setup_world(world: &mut HittableList) {
     let mut rng: ThreadRng = rand::thread_rng();
     const random_surfaces_num: usize = 2000;
     let mut random_surfaces: Vec<SurfaceAttributes> = Vec::with_capacity(random_surfaces_num);
     for i in 0..random_surfaces_num {
         let rand_vec0 = rand_vec3_range(0.0, 1.0);
-        let rand_vec1 = rand_vec3_range(0.0, 1.0);
+        let mut rand_vec1: Vec3 = rand_vec3_range(-100.0, 1.0);
+        rand_vec1 *= 100.0;
+        rand_vec1 = rand_vec1.clamp(Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 1.0, 1.0));
+
         let rand_albedo = Color::new(rand_vec0.x, rand_vec0.y, rand_vec0.z, 0.0);
         let rand_emissve = Color::new(rand_vec1.x, rand_vec1.y, rand_vec1.z, 0.0);
 
@@ -78,7 +87,7 @@ fn main() {
     let mut camera: Camera = Camera::default();
     camera.aspect_ratio = 16.0 / 9.0;
     camera.image_width = 400;
-    camera.samples_per_pixel = 20;
+    camera.samples_per_pixel = 4;
     camera.max_ray_per_pixel = 3;
 
     let mut world: HittableList = HittableList::new();

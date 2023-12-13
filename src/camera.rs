@@ -150,17 +150,19 @@ impl Camera {
             },
         ) {
             let mut scattererd: Ray = Ray::default();
-            let mut attenuation: Color = Color::default();
+            let mut diffuse: Color = Color::default();
+            let mut emissive: Color = Color::default();
             if scatter(
                 hit_result.material_id,
                 ray,
                 &hit_result,
-                &mut attenuation,
+                &mut diffuse,
+                &mut emissive,
                 &mut scattererd,
             ) {
-                return attenuation * Self::ray_color(&scattererd, depth - 1, world);
+                return emissive + diffuse * Self::ray_color(&scattererd, depth - 1, world);
             }
-            return attenuation;
+            return diffuse + emissive;
         }
 
         // BG

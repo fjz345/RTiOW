@@ -14,11 +14,14 @@ pub fn scatter(
     material_id: i32,
     ray: &Ray,
     hit_result: &HitResult,
-    attenuation: &mut Color,
+    diffuse: &mut Color,
+    emissive: &mut Color,
     scattered_ray: &mut Ray,
 ) -> bool {
-    let albedo = hit_result.surface.albedo;
-    let emissive = hit_result.surface.emissive;
+    let surface_albedo = hit_result.surface.albedo;
+    let surface_emissive = hit_result.surface.emissive;
+
+    *emissive = surface_emissive;
 
     if material_id == MATERIAL_LAMBERTIAN || material_id == MATERIAL_DEFAULT {
         let mut scatter_direction = hit_result.normal + rand_unit_vector();
@@ -26,7 +29,7 @@ pub fn scatter(
             scatter_direction = hit_result.normal;
         }
         *scattered_ray = Ray::new(hit_result.location, scatter_direction);
-        *attenuation = albedo;
+        *diffuse = surface_albedo;
         return true;
     } else if (material_id == MATERIAL_METAL) {
         let fuzz_amount: f32 = 0.0;
@@ -35,7 +38,7 @@ pub fn scatter(
             hit_result.location,
             reflected + fuzz_amount * rand_unit_vector(),
         );
-        *attenuation = albedo;
+        *diffuse = surface_albedo;
         return scattered_ray.direction.dot(hit_result.normal) > 0.0;
     }
 
