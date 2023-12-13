@@ -4,14 +4,11 @@ use palette::{Clamp, Srgb, Srgba};
 
 use crate::{
     color::{color::*, Color},
-    interval::Interval,
-    material::scatter,
-    math::{
-        math::{rand_f32, rand_f32_range, rand_on_hemisphere, rand_unit_vector},
-        Vec3, Vec4,
-    },
+    interval::*,
+    material::*,
+    math::{math::*, *},
     progress_bar::ProgressBar,
-    ray::{HitResult, HittableList, Ray},
+    ray::*,
 };
 
 pub struct Camera {
@@ -140,8 +137,8 @@ impl Camera {
     }
 
     fn ray_color(ray: &Ray, depth: i32, world: &HittableList) -> Color {
-        if (depth <= 0) {
-            return Color::new(0.0, 0.0, 0.0, 0.0);
+        if depth <= 0 {
+            return Color::new(1.0, 1.0, 1.0, 1.0);
         }
 
         if let Some(hit_result) = world.hit_all(
@@ -162,7 +159,7 @@ impl Camera {
             ) {
                 return attenuation * Self::ray_color(&scattererd, depth - 1, world);
             }
-            return Color::new(0.0, 0.0, 0.0, 0.0);
+            return attenuation;
         }
 
         // BG
@@ -188,8 +185,8 @@ impl Camera {
     }
 
     fn pixel_sample_square(&self) -> Vec3 {
-        let px = rand_f32_range(-0.5, 0.5);
-        let py = rand_f32_range(-0.5, 0.5);
+        let px = rand_range(-0.5..0.5);
+        let py = rand_range(-0.5..0.5);
         (px * self.pixel_delta_u) + (py * self.pixel_delta_v)
     }
 }

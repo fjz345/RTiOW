@@ -2,6 +2,10 @@ pub use glam::*;
 
 pub mod math {
     use glam::Vec3;
+    use rand::distributions::uniform::SampleRange;
+    use rand::distributions::uniform::SampleUniform;
+    use rand::distributions::Distribution;
+    use rand::distributions::Standard;
     use rand::thread_rng;
     use rand::Rng;
 
@@ -24,26 +28,34 @@ pub mod math {
         vec[0].abs() < s && vec[1].abs() < s && vec[2].abs() < s
     }
 
-    pub fn rand_f32() -> f32 {
+    pub fn rand<T>() -> T
+    where
+        Standard: Distribution<T>,
+    {
         let mut rng = rand::thread_rng();
-        let r: f32 = rng.gen();
+        let r: T = rng.gen::<T>();
         return r;
     }
-    pub fn rand_f32_range(min: f32, max: f32) -> f32 {
+
+    pub fn rand_range<T, R>(range: R) -> T
+    where
+        T: SampleUniform,
+        R: SampleRange<T>,
+    {
         let mut rng = rand::thread_rng();
-        let r: f32 = rng.gen_range(min..max);
+        let r: T = rng.gen_range::<T, R>(range);
         return r;
     }
 
     pub fn rand_vec3() -> Vec3 {
-        Vec3::new(rand_f32(), rand_f32(), rand_f32())
+        Vec3::new(rand::<f32>(), rand::<f32>(), rand::<f32>())
     }
 
     pub fn rand_vec3_range(min: f32, max: f32) -> Vec3 {
         Vec3::new(
-            rand_f32_range(min, max),
-            rand_f32_range(min, max),
-            rand_f32_range(min, max),
+            rand_range(min..max),
+            rand_range(min..max),
+            rand_range(min..max),
         )
     }
 

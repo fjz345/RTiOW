@@ -4,9 +4,10 @@ use crate::{
     ray::{HitResult, Ray},
 };
 
-const MATERIAL_DEFAULT: i32 = 0;
-const MATERIAL_LAMBERTIAN: i32 = 1;
-const MATERIAL_METAL: i32 = 2;
+pub const MATERIAL_DEFAULT: i32 = 0;
+pub const MATERIAL_LAMBERTIAN: i32 = 1;
+pub const MATERIAL_METAL: i32 = 2;
+pub const MATERIAL_NUM: i32 = 3;
 
 pub fn scatter(
     material_id: i32,
@@ -15,7 +16,8 @@ pub fn scatter(
     attenuation: &mut Color,
     scattered_ray: &mut Ray,
 ) -> bool {
-    let albedo = Color::new(0.5, 0.5, 0.5, 0.0);
+    let albedo = hit_result.surface.albedo;
+    let emissive = hit_result.surface.emissive;
 
     if material_id == MATERIAL_LAMBERTIAN || material_id == MATERIAL_DEFAULT {
         let mut scatter_direction = hit_result.normal + rand_unit_vector();

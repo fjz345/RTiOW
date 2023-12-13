@@ -25,12 +25,19 @@ impl Ray {
 }
 
 #[derive(Clone, Copy, Default)]
+pub struct SurfaceAttributes {
+    pub albedo: Color,
+    pub emissive: Color,
+}
+
+#[derive(Clone, Copy, Default)]
 pub struct HitResult {
     pub location: Vec3,
     pub normal: Vec3,
     pub t: f32,
     pub front_face: bool,
     pub material_id: i32,
+    pub surface: SurfaceAttributes,
 }
 
 impl HitResult {
@@ -60,6 +67,7 @@ pub struct Sphere {
     pub center: Vec3,
     pub radius: f32,
     pub material_id: i32,
+    pub surface: SurfaceAttributes,
 }
 
 impl Hittable for Sphere {
@@ -97,6 +105,7 @@ impl Hittable for Sphere {
             t: t,
             front_face: false,
             material_id: self.material_id,
+            surface: self.surface,
         };
         hit_result.set_face_normal(ray, hit_result.normal);
 
