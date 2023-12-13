@@ -8,6 +8,7 @@ use crate::{
     material::*,
     math::{math::*, *},
     progress_bar::ProgressBar,
+    random::*,
     ray::*,
 };
 

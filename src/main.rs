@@ -3,6 +3,7 @@ use std::{fs::File, io::Write, process::Output, thread::Thread};
 use camera::Camera;
 use glam::Vec3;
 use rand::{rngs::ThreadRng, Rng};
+use random::*;
 use ray::SurfaceAttributes;
 
 use crate::{color::*, material::MATERIAL_NUM, math::math::*, progress_bar::ProgressBar, ray::*};
@@ -13,6 +14,7 @@ mod interval;
 mod material;
 mod math;
 mod progress_bar;
+mod random;
 mod ray;
 
 fn setup_world(world: &mut HittableList) {

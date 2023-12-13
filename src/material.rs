@@ -1,6 +1,7 @@
 use crate::{
     color::Color,
-    math::math::{near_zero_vec3, rand_unit_vector, reflect},
+    math::math::{near_zero_vec3, reflect},
+    random::*,
     ray::{HitResult, Ray},
 };
 
