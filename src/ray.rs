@@ -45,7 +45,7 @@ impl HitResult {
 }
 
 pub trait Hittable {
-    fn hit(&self, ray: &Ray, interval: Interval, hit_result: &mut HitResult) -> bool;
+    fn hit(&self, ray: &Ray, interval: Interval) -> Option<HitResult>;
     fn clone_dyn(&self) -> Box<dyn Hittable>;
 }
 
@@ -67,7 +67,7 @@ impl Hittable for Sphere {
         Box::new(self.clone())
     }
 
-    fn hit(&self, ray: &Ray, interval: Interval, hit_result: &mut HitResult) -> bool {
+    fn hit(&self, ray: &Ray, interval: Interval) -> Option<HitResult> {
         let oc: Vec3 = ray.origin - self.center;
         let a: f32 = ray.direction.length_squared();
         let half_b = oc.dot(ray.direction);
@@ -75,7 +75,7 @@ impl Hittable for Sphere {
         let discriminant = half_b * half_b - a * c;
 
         if discriminant < 0.0 {
-            return false;
+            return None;
         }
         let discriminant_sqrt = discriminant.sqrt();
 
@@ -86,18 +86,21 @@ impl Hittable for Sphere {
         if !interval.surrounds(t) {
             t = t0;
             if !interval.surrounds(t) {
-                return false;
+                return None;
             }
         }
         t = t0.min(t1);
 
-        hit_result.material_id = self.material_id;
-        hit_result.t = t;
-        hit_result.location = ray.at(hit_result.t);
-        hit_result.normal = (hit_result.location - self.center) / self.radius;
+        let mut hit_result: HitResult = HitResult {
+            location: ray.at(t),
+            normal: (ray.at(t) - self.center) / self.radius,
+            t: t,
+            front_face: false,
+            material_id: self.material_id,
+        };
         hit_result.set_face_normal(ray, hit_result.normal);
 
-        return true;
+        return Some(hit_result);
     }
 }
 
@@ -118,26 +121,28 @@ impl HittableList {
         self.list.clear();
     }
 
-    pub fn hit(&self, ray: &Ray, interval: Interval, hit_result: &mut HitResult) -> bool {
-        let mut temp_hit_result: HitResult = HitResult::default();
+    pub fn hit_all(&self, ray: &Ray, interval: Interval) -> Option<HitResult> {
         let mut hit = false;
         let mut closest_so_far = interval.max;
-
+        let mut hit_result = HitResult::default();
         for object in self.list.iter() {
-            if object.hit(
+            if let Some(temp_hit_result) = object.hit(
                 ray,
                 Interval {
                     min: interval.min,
                     max: closest_so_far,
                 },
-                &mut temp_hit_result,
             ) {
                 hit = true;
                 closest_so_far = temp_hit_result.t;
-                *hit_result = temp_hit_result;
+                hit_result = temp_hit_result;
             }
         }
 
-        return hit;
+        if !hit {
+            return None;
+        }
+
+        return Some(hit_result);
     }
 }

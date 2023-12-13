@@ -144,14 +144,12 @@ impl Camera {
             return Color::new(0.0, 0.0, 0.0, 0.0);
         }
 
-        let mut hit_result: HitResult = HitResult::default();
-        if world.hit(
+        if let Some(hit_result) = world.hit_all(
             ray,
             Interval {
                 min: 0.0001,
                 max: INFINITY,
             },
-            &mut hit_result,
         ) {
             let mut scattererd: Ray = Ray::default();
             let mut attenuation: Color = Color::default();
