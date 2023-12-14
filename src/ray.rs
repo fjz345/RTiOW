@@ -1,7 +1,7 @@
 use std::{default, f32::INFINITY, mem::Discriminant, ops::DerefMut};
 
 use crate::interval::Interval;
-use glam::Vec3;
+use glam::{Vec3, Vec4};
 
 use crate::color::Color;
 
@@ -103,7 +103,49 @@ impl Hittable for Sphere {
             location: ray.at(t),
             normal: (ray.at(t) - self.center) / self.radius,
             t: t,
-            front_face: false,
+            front_face: true,
+            material_id: self.material_id,
+            surface: self.surface,
+        };
+        hit_result.set_face_normal(ray, hit_result.normal);
+
+        return Some(hit_result);
+    }
+}
+
+#[derive(Clone)]
+pub struct Plane {
+    pub center: Vec3,
+    pub normal: Vec3,
+    pub material_id: i32,
+    pub surface: SurfaceAttributes,
+}
+
+impl Hittable for Plane {
+    fn clone_dyn(&self) -> Box<dyn Hittable> {
+        Box::new(self.clone())
+    }
+
+    fn hit(&self, ray: &Ray, interval: Interval) -> Option<HitResult> {
+        let normalized_normal = self.normal.normalize();
+        let denominator = normalized_normal.dot(ray.direction.normalize());
+
+        if denominator.abs() < 0.0001 {
+            return None;
+        }
+
+        let p010 = self.center - ray.origin;
+        let t = p010.dot(normalized_normal) / denominator;
+
+        if !interval.surrounds(t) {
+            return None;
+        }
+
+        let mut hit_result: HitResult = HitResult {
+            location: ray.at(t),
+            normal: self.normal,
+            t: t,
+            front_face: true,
             material_id: self.material_id,
             surface: self.surface,
         };
