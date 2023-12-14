@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, process::Output, thread::Thread};
+use std::{fs::File, io::Write, ops::Mul, process::Output, thread::Thread};
 
 use camera::Camera;
 use glam::Vec3;
@@ -27,10 +27,13 @@ fn setup_world(world: &mut HittableList) {
     let mut random_surfaces: Vec<SurfaceAttributes> = Vec::with_capacity(RANDOM_SURFACES_NUM);
     for _i in 0..RANDOM_SURFACES_NUM {
         let rand_vec0 = rand_vec3_range(0.0, 1.0);
-        let mut rand_vec1: Vec3 = rand_vec3_range(-100.0, 1.0);
-        rand_vec1 *= 100.0;
-        rand_vec1 = rand_vec1.clamp(Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 1.0, 1.0));
-
+        const SURFACE_EMISSIVE_CHANCE: f32 = 0.2;
+        let mut rand_vec1: Vec3 = if rand_range(0.0..1.0) <= SURFACE_EMISSIVE_CHANCE {
+            let mut emissive: Vec3 = rand_vec0;
+            emissive * 1.0
+        } else {
+            Vec3::new(0.0, 0.0, 0.0)
+        };
         let rand_albedo = Color::new(rand_vec0.x, rand_vec0.y, rand_vec0.z, 0.0);
         let rand_emissve = Color::new(rand_vec1.x, rand_vec1.y, rand_vec1.z, 0.0);
 
