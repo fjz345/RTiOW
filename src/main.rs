@@ -169,7 +169,8 @@ fn main() {
     camera.fov = 90.0;
     camera.samples_per_pixel = 20;
     camera.max_ray_per_pixel = 10;
-    camera.position = Vec3::new(0.0, 5.0, 0.0);
+    camera.position = Vec3::new(0.0, 8.0, -15.0);
+    camera.look_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
 
     let mut world: HittableList = HittableList::new();
     setup_world0(&mut world);

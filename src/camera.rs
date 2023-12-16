@@ -28,6 +28,8 @@ pub struct Camera {
     pixel_delta_u: Vec3,
     pixel_delta_v: Vec3,
     pixel00_loc: Vec3,
+
+    camera_mat: Mat3,
 }
 
 impl Default for Camera {
@@ -51,7 +53,21 @@ impl Camera {
             pixel_delta_u: Vec3::new(0.0, 0.0, 0.0),
             pixel_delta_v: Vec3::new(0.0, 0.0, 0.0),
             pixel00_loc: Vec3::new(0.0, 0.0, 0.0),
+            camera_mat: Mat3::from_cols(
+                Vec3::new(1.0, 0.0, 0.0),
+                Vec3::new(0.0, 1.0, 0.0),
+                Vec3::new(0.0, 0.0, 1.0),
+            ),
         }
+    }
+
+    pub fn look_at(&mut self, world_location: Vec3, up_vector: Vec3) {
+        let forward: Vec3 = (self.position - world_location).normalize();
+        assert_ne!(forward, up_vector);
+        let right = up_vector.normalize().cross(forward);
+        let up = forward.cross(right);
+
+        self.camera_mat = Mat3::from_cols(right, up, forward);
     }
 
     pub fn render(&mut self, world: &HittableList) {
@@ -97,13 +113,13 @@ impl Camera {
         let theta = deg_to_rad(self.fov as f64);
         let h = (theta / 2.0).tan();
         let viewport_aspectratio = (self.image_width as f64) / (self.image_height as f64);
-        let viewport_height = 2.0 * h * focal_length;
-        let viewport_width = viewport_height * viewport_aspectratio;
+        let viewport_height: f32 = (2.0 * h * focal_length) as f32;
+        let viewport_width: f32 = (viewport_height * viewport_aspectratio as f32) as f32;
 
-        let viewport_u = Vec3::new(viewport_width as f32, 0.0, 0.0);
-        let viewport_v = Vec3::new(0.0, -viewport_height as f32, 0.0);
+        let viewport_u = viewport_width * self.camera_mat.x_axis;
+        let viewport_v = viewport_height * -self.camera_mat.y_axis;
         let viewport_upper_left = self.position
-            - Vec3::new(0.0, 0.0, focal_length as f32)
+            - self.camera_mat.z_axis * focal_length as f32
             - viewport_u / 2.0
             - viewport_v / 2.0;
 
