@@ -139,7 +139,7 @@ impl Camera {
 
     fn ray_color(ray: &Ray, depth: i32, world: &HittableList) -> Color {
         if depth <= 0 {
-            return Color::new(1.0, 1.0, 1.0, 1.0);
+            return Color::new(0.0, 0.0, 0.0, 0.0);
         }
 
         if let Some(hit_result) = world.hit_all(
@@ -150,8 +150,8 @@ impl Camera {
             },
         ) {
             let mut scattererd: Ray = Ray::default();
-            let mut diffuse: Color = Color::default();
-            let mut emissive: Color = Color::default();
+            let mut diffuse: Color = Color::new(0.0, 0.0, 0.0, 1.0);
+            let mut emissive: Color = Color::new(0.0, 0.0, 0.0, 1.0);
             if scatter(
                 hit_result.material_id,
                 ray,

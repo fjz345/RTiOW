@@ -2,11 +2,18 @@ use std::{fs::File, io::Write, ops::Mul, process::Output, thread::Thread};
 
 use camera::Camera;
 use glam::Vec3;
+use material::*;
 use rand::{rngs::ThreadRng, Rng};
 use random::*;
 use ray::SurfaceAttributes;
 
-use crate::{color::*, material::MATERIAL_NUM, math::math::*, progress_bar::ProgressBar, ray::*};
+use crate::{
+    color::*,
+    material::{MATERIAL_DIELECTRIC, MATERIAL_NUM},
+    math::math::*,
+    progress_bar::ProgressBar,
+    ray::*,
+};
 
 mod camera;
 mod color;
@@ -22,7 +29,7 @@ camera direction
 camera projection
 */
 
-fn setup_world(world: &mut HittableList) {
+fn setup_world0(world: &mut HittableList) {
     const RANDOM_SURFACES_NUM: usize = 2000;
     let mut random_surfaces: Vec<SurfaceAttributes> = Vec::with_capacity(RANDOM_SURFACES_NUM);
     for _i in 0..RANDOM_SURFACES_NUM {
@@ -40,6 +47,7 @@ fn setup_world(world: &mut HittableList) {
         let rand_surface: SurfaceAttributes = SurfaceAttributes {
             albedo: rand_albedo,
             emissive: rand_emissve,
+            ir: 1.5,
         };
 
         random_surfaces.push(rand_surface);
@@ -58,7 +66,7 @@ fn setup_world(world: &mut HittableList) {
         let rand_sphere: Sphere = Sphere {
             center: rand_position,
             radius: radius,
-            material_id: rand_material_id,
+            material_id: MATERIAL_DIELECTRIC,
             surface: random_surfaces[rand_surface_index],
         };
 
@@ -80,6 +88,7 @@ fn setup_world(world: &mut HittableList) {
         surface: SurfaceAttributes {
             albedo: Color::new(0.5, 0.5, 0.5, 1.0),
             emissive: Color::new(0.0, 0.0, 0.0, 1.0),
+            ir: 1.0,
         },
     });
 
@@ -89,16 +98,80 @@ fn setup_world(world: &mut HittableList) {
     }
 }
 
+fn setup_world1(world: &mut HittableList) {
+    let mut surfaces: Vec<SurfaceAttributes> = Vec::new();
+    let surface: SurfaceAttributes = SurfaceAttributes {
+        albedo: Color::new(1.0, 0.0, 0.0, 1.0),
+        emissive: Color::new(0.0, 0.0, 0.0, 1.0),
+        ir: 1.5,
+    };
+
+    let surface2: SurfaceAttributes = SurfaceAttributes {
+        albedo: Color::new(0.5, 0.5, 0.5, 1.0),
+        emissive: Color::new(0.0, 0.0, 0.0, 1.0),
+        ir: 1.5,
+    };
+    surfaces.push(surface);
+    surfaces.push(surface2);
+
+    let mut spheres: Vec<Sphere> = Vec::new();
+    let sphere: Sphere = Sphere {
+        center: Vec3::new(0.0, 1.0, -3.0),
+        radius: 1.0,
+        material_id: MATERIAL_LAMBERTIAN,
+        surface: surfaces[1],
+    };
+    let sphere2: Sphere = Sphere {
+        center: Vec3::new(2.00, 1.0, -3.0),
+        radius: 1.0,
+        material_id: MATERIAL_METAL,
+        surface: surfaces[1],
+    };
+    let sphere3: Sphere = Sphere {
+        center: Vec3::new(-2.0, 1.0, -3.0),
+        radius: -1.0,
+        material_id: MATERIAL_DIELECTRIC,
+        surface: surfaces[0],
+    };
+    spheres.push(sphere);
+    spheres.push(sphere2);
+    spheres.push(sphere3);
+
+    let hittable_ground: Box<dyn Hittable> = Box::new(Plane {
+        center: Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        },
+        normal: Vec3 {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        },
+        material_id: MATERIAL_LAMBERTIAN,
+        surface: SurfaceAttributes {
+            albedo: Color::new(0.5, 0.5, 0.5, 1.0),
+            emissive: Color::new(0.0, 0.0, 0.0, 1.0),
+            ir: 1.0,
+        },
+    });
+
+    world.add_hittable(hittable_ground);
+    for sphere in spheres {
+        world.add_hittable(Box::new(sphere));
+    }
+}
+
 fn main() {
     let mut camera: Camera = Camera::default();
     camera.aspect_ratio = 16.0 / 9.0;
     camera.image_width = 400;
-    camera.samples_per_pixel = 4;
-    camera.max_ray_per_pixel = 3;
-    camera.position = Vec3::new(0.0, 5.0, 0.0);
+    camera.samples_per_pixel = 20;
+    camera.max_ray_per_pixel = 10;
+    camera.position = Vec3::new(0.0, 0.7, 0.0);
 
     let mut world: HittableList = HittableList::new();
-    setup_world(&mut world);
+    setup_world1(&mut world);
 
     camera.render(&world);
 }

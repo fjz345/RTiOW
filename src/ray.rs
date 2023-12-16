@@ -28,6 +28,7 @@ impl Ray {
 pub struct SurfaceAttributes {
     pub albedo: Color,
     pub emissive: Color,
+    pub ir: f32,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -35,15 +36,15 @@ pub struct HitResult {
     pub location: Vec3,
     pub normal: Vec3,
     pub t: f32,
-    pub front_face: bool,
+    pub front_face: Option<bool>,
     pub material_id: i32,
     pub surface: SurfaceAttributes,
 }
 
 impl HitResult {
     pub fn set_face_normal(&mut self, ray: &Ray, outward_normal: Vec3) {
-        self.front_face = ray.direction.dot(outward_normal) < 0.0;
-        self.normal = if self.front_face {
+        self.front_face = Some(ray.direction.dot(outward_normal) < 0.0);
+        self.normal = if self.front_face.unwrap() {
             outward_normal
         } else {
             -outward_normal
@@ -89,21 +90,20 @@ impl Hittable for Sphere {
 
         let t0: f32 = (-half_b - discriminant_sqrt) / a;
         let t1: f32 = (-half_b + discriminant_sqrt) / a;
-        let mut t = t1;
+        let mut t: f32 = t0;
 
         if !interval.surrounds(t) {
-            t = t0;
+            t = t1;
             if !interval.surrounds(t) {
                 return None;
             }
         }
-        t = t0.min(t1);
 
         let mut hit_result: HitResult = HitResult {
             location: ray.at(t),
             normal: (ray.at(t) - self.center) / self.radius,
             t: t,
-            front_face: true,
+            front_face: None,
             material_id: self.material_id,
             surface: self.surface,
         };
@@ -145,7 +145,7 @@ impl Hittable for Plane {
             location: ray.at(t),
             normal: self.normal,
             t: t,
-            front_face: true,
+            front_face: None,
             material_id: self.material_id,
             surface: self.surface,
         };
