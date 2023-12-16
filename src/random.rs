@@ -48,7 +48,20 @@ pub fn rand_sphere_vec3() -> Vec3 {
         }
     }
 
+    panic!();
     return Vec3::new(0.0, 0.0, 0.0);
+}
+
+pub fn rand_disc_vec2() -> Vec2 {
+    while true {
+        let p = Vec2::new(rand_range(-1.0..1.0), rand_range(-1.0..1.0));
+        if (p.length_squared() < 1.0) {
+            return p;
+        }
+    }
+
+    panic!();
+    return Vec2::new(0.0, 0.0);
 }
 
 pub fn rand_unit_vector() -> Vec3 {

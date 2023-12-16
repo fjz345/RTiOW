@@ -30,6 +30,12 @@ pub struct Camera {
     pixel00_loc: Vec3,
 
     camera_mat: Mat3,
+
+    pub defocus_angle: f32, // Variation angle of rays through each pixel
+    pub focus_dist: f32,    // distance from camera lookfrom point to plane of perfect focus
+
+    defocus_disk_u: Vec3,
+    defocus_disk_v: Vec3,
 }
 
 impl Default for Camera {
@@ -58,6 +64,10 @@ impl Camera {
                 Vec3::new(0.0, 1.0, 0.0),
                 Vec3::new(0.0, 0.0, 1.0),
             ),
+            defocus_angle: 0.0,
+            focus_dist: 10.0,
+            defocus_disk_u: Vec3::new(1.0, 0.0, 0.0),
+            defocus_disk_v: Vec3::new(0.0, 1.0, 0.0),
         }
     }
 
@@ -109,17 +119,16 @@ impl Camera {
         self.image_height = ((self.image_width as f32 / self.aspect_ratio) as i32).max(1);
         self.image_size = [self.image_width, self.image_height];
 
-        let focal_length = 1.0;
         let theta = deg_to_rad(self.fov as f64);
         let h = (theta / 2.0).tan();
         let viewport_aspectratio = (self.image_width as f64) / (self.image_height as f64);
-        let viewport_height: f32 = (2.0 * h * focal_length) as f32;
+        let viewport_height: f32 = (2.0 * h * self.focus_dist as f64) as f32;
         let viewport_width: f32 = (viewport_height * viewport_aspectratio as f32) as f32;
 
         let viewport_u = viewport_width * self.camera_mat.x_axis;
         let viewport_v = viewport_height * -self.camera_mat.y_axis;
         let viewport_upper_left = self.position
-            - self.camera_mat.z_axis * focal_length as f32
+            - self.camera_mat.z_axis * self.focus_dist as f32
             - viewport_u / 2.0
             - viewport_v / 2.0;
 
@@ -127,6 +136,11 @@ impl Camera {
         self.pixel_delta_v = viewport_v / self.image_height as f32;
 
         self.pixel00_loc = viewport_upper_left + (self.pixel_delta_u + self.pixel_delta_v) * 0.5;
+
+        let defocus_radius: f32 =
+            (self.focus_dist * deg_to_rad(self.defocus_angle as f64 * 0.5) as f32).tan();
+        self.defocus_disk_u = self.camera_mat.x_axis * defocus_radius;
+        self.defocus_disk_u = self.camera_mat.y_axis * defocus_radius;
     }
 
     fn write_color(accum_string_file: &mut String, texel_color: Color, samples_per_pixel: i32) {
@@ -200,7 +214,11 @@ impl Camera {
         };
         let pixel_sample = pixel_center + pixel_rand_offset;
 
-        let ray_origin = self.position;
+        let ray_origin = if self.defocus_angle <= 0.0 {
+            self.position
+        } else {
+            self.defocus_disk_sample()
+        };
         let ray_direction = pixel_sample - ray_origin;
 
         Ray::new(ray_origin, ray_direction)
@@ -210,5 +228,10 @@ impl Camera {
         let px = rand_range(-0.5..0.5);
         let py = rand_range(-0.5..0.5);
         (px * self.pixel_delta_u) + (py * self.pixel_delta_v)
+    }
+
+    fn defocus_disk_sample(&self) -> Vec3 {
+        let p = rand_disc_vec2();
+        return self.position + (p.x * self.defocus_disk_u) + (p.y * self.defocus_disk_v);
     }
 }

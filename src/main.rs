@@ -169,8 +169,12 @@ fn main() {
     camera.fov = 90.0;
     camera.samples_per_pixel = 20;
     camera.max_ray_per_pixel = 10;
-    camera.position = Vec3::new(0.0, 8.0, -15.0);
-    camera.look_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+    camera.position = Vec3::new(0.0, 8.0, -9.0);
+    let look_at_position = Vec3::new(0.0, 0.0, 0.0);
+    camera.look_at(look_at_position, Vec3::new(0.0, 1.0, 0.0));
+
+    camera.defocus_angle = 2.0;
+    camera.focus_dist = (camera.position - look_at_position).length();
 
     let mut world: HittableList = HittableList::new();
     setup_world0(&mut world);
