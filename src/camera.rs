@@ -15,6 +15,7 @@ use crate::{
 pub struct Camera {
     pub position: Vec3,
     pub rotation: Vec4,
+    pub fov: f32, // Deg
 
     pub aspect_ratio: f32,
     pub image_width: i32,
@@ -40,6 +41,7 @@ impl Camera {
         Self {
             position: Vec3::new(0.0, 0.0, 0.0),
             rotation: Vec4::new(0.0, 0.0, 0.0, 0.0),
+            fov: 90.0,
             aspect_ratio: 1.0,
             image_width: 100,
             samples_per_pixel: 1,
@@ -60,24 +62,6 @@ impl Camera {
 
         let mut image_ppm: String = String::new();
         image_ppm += &format!("P3\n{} {}\n255\n", self.image_width, self.image_height).to_string();
-
-        let viewport_aspectratio = (self.image_width as f64) / (self.image_height as f64);
-        let viewport_height = 2.0;
-        let viewport_width = viewport_height * viewport_aspectratio;
-        let viewport_size: (f64, f64) = (viewport_width, viewport_height);
-
-        let mut camera_center = self.position;
-        let mut focal_length = 1.0;
-
-        let viewport_u = Vec3::new(viewport_width as f32, 0.0, 0.0);
-        let viewport_v = Vec3::new(0.0, -viewport_height as f32, 0.0);
-        let viewport_upper_left =
-            camera_center - Vec3::new(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
-
-        self.pixel_delta_u = viewport_u / self.image_width as f32;
-        self.pixel_delta_v = viewport_v / self.image_height as f32;
-
-        self.pixel00_loc = viewport_upper_left + (self.pixel_delta_u + self.pixel_delta_v) * 0.5;
 
         for y in 0..self.image_height {
             for x in 0..self.image_width {
@@ -108,6 +92,25 @@ impl Camera {
     fn initialize(&mut self) {
         self.image_height = ((self.image_width as f32 / self.aspect_ratio) as i32).max(1);
         self.image_size = [self.image_width, self.image_height];
+
+        let focal_length = 1.0;
+        let theta = deg_to_rad(self.fov as f64);
+        let h = (theta / 2.0).tan();
+        let viewport_aspectratio = (self.image_width as f64) / (self.image_height as f64);
+        let viewport_height = 2.0 * h * focal_length;
+        let viewport_width = viewport_height * viewport_aspectratio;
+
+        let viewport_u = Vec3::new(viewport_width as f32, 0.0, 0.0);
+        let viewport_v = Vec3::new(0.0, -viewport_height as f32, 0.0);
+        let viewport_upper_left = self.position
+            - Vec3::new(0.0, 0.0, focal_length as f32)
+            - viewport_u / 2.0
+            - viewport_v / 2.0;
+
+        self.pixel_delta_u = viewport_u / self.image_width as f32;
+        self.pixel_delta_v = viewport_v / self.image_height as f32;
+
+        self.pixel00_loc = viewport_upper_left + (self.pixel_delta_u + self.pixel_delta_v) * 0.5;
     }
 
     fn write_color(accum_string_file: &mut String, texel_color: Color, samples_per_pixel: i32) {

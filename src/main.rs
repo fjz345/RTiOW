@@ -166,6 +166,7 @@ fn main() {
     let mut camera: Camera = Camera::default();
     camera.aspect_ratio = 16.0 / 9.0;
     camera.image_width = 400;
+    camera.fov = 90.0;
     camera.samples_per_pixel = 20;
     camera.max_ray_per_pixel = 10;
     camera.position = Vec3::new(0.0, 5.0, 0.0);
