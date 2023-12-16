@@ -156,7 +156,7 @@ impl Hittable for Plane {
 }
 
 pub struct HittableList {
-    pub list: Vec<Box<dyn Hittable>>,
+    pub list: Vec<Box<dyn Hittable + Sync + Send>>,
 }
 
 impl HittableList {
@@ -164,7 +164,7 @@ impl HittableList {
         Self { list: Vec::new() }
     }
 
-    pub fn add_hittable(&mut self, hittable: Box<dyn Hittable>) {
+    pub fn add_hittable(&mut self, hittable: Box<dyn Hittable + Sync + Send>) {
         self.list.push(hittable);
     }
 

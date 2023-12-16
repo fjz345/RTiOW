@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, ops::Mul, process::Output, thread::Thread};
+use std::{fs::File, io::Write, ops::Mul, process::Output, sync::Arc, thread::Thread};
 
 use camera::Camera;
 use glam::Vec3;
@@ -73,7 +73,7 @@ fn setup_world0(world: &mut HittableList) {
         random_spheres.push(rand_sphere);
     }
 
-    let hittable_ground: Box<dyn Hittable> = Box::new(Plane {
+    let hittable_ground: Box<dyn Hittable + Sync + Send> = Box::new(Plane {
         center: Vec3 {
             x: 0.0,
             y: 0.0,
@@ -138,7 +138,7 @@ fn setup_world1(world: &mut HittableList) {
     spheres.push(sphere2);
     spheres.push(sphere3);
 
-    let hittable_ground: Box<dyn Hittable> = Box::new(Plane {
+    let hittable_ground: Box<dyn Hittable + Sync + Send> = Box::new(Plane {
         center: Vec3 {
             x: 0.0,
             y: 0.0,
@@ -168,7 +168,7 @@ fn main() {
     camera.aspect_ratio = 16.0 / 9.0;
     camera.image_width = 400;
     camera.fov = 40.0;
-    camera.samples_per_pixel = 100;
+    camera.samples_per_pixel = 20;
     camera.max_ray_per_pixel = 10;
     camera.position = Vec3::new(-30.0, 6.0, -20.0);
     let look_at_position = Vec3::new(0.0, 0.0, 0.0);
@@ -177,11 +177,13 @@ fn main() {
     camera.defocus_angle = 0.6 * 0.5;
     camera.focus_dist = (camera.position - look_at_position).length();
 
-    let mut world: HittableList = HittableList::new();
-    setup_world0(&mut world);
+    let mut world0: HittableList = HittableList::new();
+    setup_world0(&mut world0);
     let mut world1: HittableList = HittableList::new();
     setup_world1(&mut world1);
-    world.merge(world1);
+    world0.merge(world1);
 
-    camera.render(&world);
+    let world_arc = Arc::new(world0);
+
+    camera.render(&world_arc);
 }

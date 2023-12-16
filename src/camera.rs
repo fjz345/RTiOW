@@ -1,4 +1,13 @@
-use std::{default, f32::INFINITY, fs::File, io::Write};
+use std::{
+    default,
+    f32::INFINITY,
+    fs::File,
+    io::Write,
+    os::windows::fs::FileTypeExt,
+    sync::Arc,
+    thread::{self, JoinHandle},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use palette::{Clamp, Srgb, Srgba};
 
@@ -12,6 +21,7 @@ use crate::{
     ray::*,
 };
 
+#[derive(Clone)]
 pub struct Camera {
     pub position: Vec3,
     pub rotation: Vec4,
@@ -80,8 +90,10 @@ impl Camera {
         self.camera_mat = Mat3::from_cols(right, up, forward);
     }
 
-    pub fn render(&mut self, world: &HittableList) {
+    pub fn render(&mut self, world: &Arc<HittableList>) {
         self.initialize();
+
+        let time_start = SystemTime::now();
 
         let mut progress_bar: ProgressBar =
             ProgressBar::new((self.image_width * self.image_height) as f64, 20);
@@ -89,16 +101,95 @@ impl Camera {
         let mut image_ppm: String = String::new();
         image_ppm += &format!("P3\n{} {}\n255\n", self.image_width, self.image_height).to_string();
 
+        self.render_inner(world, &mut progress_bar, &mut image_ppm);
+
+        assert!(progress_bar.is_finished());
+        println!("Render finished!");
+
+        let time_now = SystemTime::now();
+        let since_the_epoch = time_now
+            .duration_since(time_start)
+            .expect("Time went backwards");
+        println!("Render took: {:?} seconds", since_the_epoch.as_secs_f32());
+
+        let render_file_path = "img/render.ppm";
+        println!("Saving to file {}...", render_file_path);
+        let mut render_file = File::create(render_file_path).unwrap();
+        render_file.write_all(image_ppm.as_bytes()).unwrap();
+    }
+
+    fn render_inner_thread(world: Arc<HittableList>, camera: Arc<Camera>, x: i32, y: i32) -> Color {
+        let mut sum_texel_color: Color = Color::new(0.0, 0.0, 0.0, 1.0);
+        for _aa in 0..camera.samples_per_pixel {
+            let ray: Ray = camera.get_ray(x, y);
+
+            let texel_color: Color = Self::ray_color(&ray, camera.max_ray_per_pixel, &world);
+            sum_texel_color += texel_color;
+        }
+
+        sum_texel_color
+    }
+
+    pub fn render_inner(
+        &mut self,
+        world: &Arc<HittableList>,
+        progress_bar: &mut ProgressBar,
+        image_string: &mut String,
+    ) {
+        const MULTITHREAD_ENABLE: bool = true;
+        if MULTITHREAD_ENABLE {
+            let num_threads = self.image_width * self.image_height;
+            let mut all_thread_handles: Vec<JoinHandle<(Color)>> =
+                Vec::with_capacity(num_threads as usize);
+
+            let world_shared: Arc<HittableList> = world.clone();
+            let camera_shared: Arc<Camera> = Arc::new(self.clone());
+
+            for i in 0..num_threads {
+                let thread_world = world_shared.clone();
+                let thread_camera = camera_shared.clone();
+                let thread_id = i;
+                let thread_x: i32 = thread_id % self.image_width;
+                let thread_y = thread_id / self.image_width;
+                let thread_handle = thread::spawn(move || {
+                    let local_camera_shared = thread_camera;
+                    let local_world_shared = thread_world;
+                    let texel_color = Self::render_inner_thread(
+                        local_world_shared,
+                        local_camera_shared,
+                        thread_x,
+                        thread_y,
+                    );
+                    return texel_color;
+                });
+                all_thread_handles.push(thread_handle);
+            }
+
+            let mut thread_results: Vec<Color> = Vec::new();
+            for thread_handle in all_thread_handles {
+                let thread_result = thread_handle.join().unwrap();
+                thread_results.push(thread_result);
+            }
+
+            for result in thread_results {
+                Self::write_color(image_string, result, self.samples_per_pixel);
+                // Todo: fix progressbar increment for MT
+                progress_bar.inc();
+            }
+
+            return;
+        }
+
         for y in 0..self.image_height {
             for x in 0..self.image_width {
                 let mut sum_texel_color: Color = Color::new(0.0, 0.0, 0.0, 1.0);
-                for aa in 0..self.samples_per_pixel {
+                for _aa in 0..self.samples_per_pixel {
                     let ray: Ray = self.get_ray(x, y);
 
                     let texel_color: Color = Self::ray_color(&ray, self.max_ray_per_pixel, &world);
                     sum_texel_color += texel_color;
                 }
-                Self::write_color(&mut image_ppm, sum_texel_color, self.samples_per_pixel);
+                Self::write_color(image_string, sum_texel_color, self.samples_per_pixel);
 
                 if (x + y * self.image_width) % progress_bar.calc_increment() as i32 == 0 {
                     progress_bar.print_progress_percent();
@@ -106,13 +197,6 @@ impl Camera {
                 }
             }
         }
-        assert!(progress_bar.is_finished());
-        println!("Render finished!");
-
-        let render_file_path = "img/render.ppm";
-        println!("Saving to file {}...", render_file_path);
-        let mut render_file = File::create(render_file_path).unwrap();
-        render_file.write_all(image_ppm.as_bytes()).unwrap();
     }
 
     fn initialize(&mut self) {
