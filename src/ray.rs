@@ -196,4 +196,10 @@ impl HittableList {
 
         return Some(hit_result);
     }
+
+    pub fn merge(&mut self, other: Self) {
+        for other_hittable in other.list {
+            self.add_hittable(other_hittable);
+        }
+    }
 }

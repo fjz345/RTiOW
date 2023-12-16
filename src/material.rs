@@ -12,6 +12,7 @@ pub const MATERIAL_LAMBERTIAN: i32 = 1;
 pub const MATERIAL_METAL: i32 = 2;
 pub const MATERIAL_DIELECTRIC: i32 = 3;
 pub const MATERIAL_NUM: i32 = 4;
+pub const EMISSIVE_OFF: bool = true;
 
 pub fn scatter(
     material_id: i32,
@@ -24,7 +25,11 @@ pub fn scatter(
     let surface_albedo = hit_result.surface.albedo;
     let surface_emissive = hit_result.surface.emissive;
 
-    *emissive = surface_emissive;
+    *emissive = if EMISSIVE_OFF {
+        Color::new(0.0, 0.0, 0.0, 1.0)
+    } else {
+        surface_emissive
+    };
 
     if material_id == MATERIAL_LAMBERTIAN || material_id == MATERIAL_DEFAULT {
         let mut scatter_direction = hit_result.normal + rand_unit_vector();
