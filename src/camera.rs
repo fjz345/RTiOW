@@ -140,7 +140,7 @@ impl Camera {
         let defocus_radius: f32 =
             (self.focus_dist * deg_to_rad(self.defocus_angle as f64 * 0.5) as f32).tan();
         self.defocus_disk_u = self.camera_mat.x_axis * defocus_radius;
-        self.defocus_disk_u = self.camera_mat.y_axis * defocus_radius;
+        self.defocus_disk_v = self.camera_mat.y_axis * defocus_radius;
     }
 
     fn write_color(accum_string_file: &mut String, texel_color: Color, samples_per_pixel: i32) {

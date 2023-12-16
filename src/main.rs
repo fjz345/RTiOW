@@ -53,10 +53,10 @@ fn setup_world0(world: &mut HittableList) {
         random_surfaces.push(rand_surface);
     }
 
-    const RANDOM_SPHERES_NUM: usize = 200;
+    const RANDOM_SPHERES_NUM: usize = 500;
     let mut random_spheres: Vec<Sphere> = Vec::with_capacity(RANDOM_SPHERES_NUM);
     for _i in 0..RANDOM_SPHERES_NUM {
-        let radius: f32 = rand_range(0.1..2.2);
+        let radius: f32 = rand_range(0.4..1.0);
         let mut rand_position: Vec3 = rand_vec3_range(-30.0, 30.0);
         rand_position.y = radius;
 
@@ -114,22 +114,23 @@ fn setup_world1(world: &mut HittableList) {
     surfaces.push(surface);
     surfaces.push(surface2);
 
+    let r = 5.0;
     let mut spheres: Vec<Sphere> = Vec::new();
     let sphere: Sphere = Sphere {
-        center: Vec3::new(0.0, 1.0, -3.0),
-        radius: 1.0,
+        center: Vec3::new(0.0, r, -3.0),
+        radius: r,
         material_id: MATERIAL_LAMBERTIAN,
         surface: surfaces[1],
     };
     let sphere2: Sphere = Sphere {
-        center: Vec3::new(2.00, 1.0, -3.0),
-        radius: 1.0,
+        center: Vec3::new(2.0 * r, r, -3.0),
+        radius: r,
         material_id: MATERIAL_METAL,
         surface: surfaces[1],
     };
     let sphere3: Sphere = Sphere {
-        center: Vec3::new(-2.0, 1.0, -3.0),
-        radius: -1.0,
+        center: Vec3::new(-2.0 * r, r, -3.0),
+        radius: r,
         material_id: MATERIAL_DIELECTRIC,
         surface: surfaces[0],
     };
@@ -166,18 +167,21 @@ fn main() {
     let mut camera: Camera = Camera::default();
     camera.aspect_ratio = 16.0 / 9.0;
     camera.image_width = 400;
-    camera.fov = 90.0;
-    camera.samples_per_pixel = 20;
+    camera.fov = 40.0;
+    camera.samples_per_pixel = 100;
     camera.max_ray_per_pixel = 10;
-    camera.position = Vec3::new(0.0, 8.0, -9.0);
+    camera.position = Vec3::new(-30.0, 6.0, -20.0);
     let look_at_position = Vec3::new(0.0, 0.0, 0.0);
     camera.look_at(look_at_position, Vec3::new(0.0, 1.0, 0.0));
 
-    camera.defocus_angle = 2.0;
+    camera.defocus_angle = 0.6 * 0.5;
     camera.focus_dist = (camera.position - look_at_position).length();
 
     let mut world: HittableList = HittableList::new();
     setup_world0(&mut world);
+    let mut world1: HittableList = HittableList::new();
+    setup_world1(&mut world1);
+    world.merge(world1);
 
     camera.render(&world);
 }
