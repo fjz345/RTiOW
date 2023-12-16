@@ -66,7 +66,7 @@ fn setup_world0(world: &mut HittableList) {
         let rand_sphere: Sphere = Sphere {
             center: rand_position,
             radius: radius,
-            material_id: MATERIAL_DIELECTRIC,
+            material_id: rand_material_id,
             surface: random_surfaces[rand_surface_index],
         };
 
@@ -168,10 +168,10 @@ fn main() {
     camera.image_width = 400;
     camera.samples_per_pixel = 20;
     camera.max_ray_per_pixel = 10;
-    camera.position = Vec3::new(0.0, 0.7, 0.0);
+    camera.position = Vec3::new(0.0, 5.0, 0.0);
 
     let mut world: HittableList = HittableList::new();
-    setup_world1(&mut world);
+    setup_world0(&mut world);
 
     camera.render(&world);
 }
