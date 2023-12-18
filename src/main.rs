@@ -6,6 +6,7 @@ use material::*;
 use rand::{rngs::ThreadRng, Rng};
 use random::*;
 use ray::SurfaceAttributes;
+use renderer::render;
 
 use crate::{
     color::*,
@@ -23,6 +24,7 @@ mod math;
 mod progress_bar;
 mod random;
 mod ray;
+mod renderer;
 
 /* TODO:
 camera direction
@@ -166,9 +168,9 @@ fn setup_world1(world: &mut HittableList) {
 fn main() {
     let mut camera: Camera = Camera::default();
     camera.aspect_ratio = 16.0 / 9.0;
-    camera.image_width = 400;
+    camera.image_width = 500;
     camera.fov = 40.0;
-    camera.samples_per_pixel = 20;
+    camera.samples_per_pixel = 10;
     camera.max_ray_per_pixel = 10;
     camera.position = Vec3::new(-30.0, 6.0, -20.0);
     let look_at_position = Vec3::new(0.0, 0.0, 0.0);
@@ -183,7 +185,7 @@ fn main() {
     setup_world1(&mut world1);
     world0.merge(world1);
 
-    let world_arc = Arc::new(world0);
+    let mut world = world0;
 
-    camera.render(&world_arc);
+    render(world, camera);
 }
