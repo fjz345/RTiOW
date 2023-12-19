@@ -3,7 +3,7 @@ use std::{
     fs::File,
     io::Write,
     sync::Arc,
-    thread::{self, JoinHandle},
+    thread::{self, JoinHandle, ScopedJoinHandle},
     time::SystemTime,
 };
 
@@ -18,21 +18,17 @@ use crate::{
     ray::{HittableList, Ray},
 };
 
-pub fn render(mut world: HittableList, mut camera: Camera) {
+pub fn render(world: &mut HittableList, camera: &mut Camera) {
     camera.initialize();
 
     let (image_width, image_height) = camera.get_image_xy();
 
     let time_start = SystemTime::now();
 
-    let mut progress_bar: ProgressBar = ProgressBar::new((image_width * image_height) as f64, 20);
-
     let mut image_ppm: String = String::new();
     image_ppm += &format!("P3\n{} {}\n255\n", image_width, image_height).to_string();
 
-    render_inner(world, camera, &mut progress_bar, &mut image_ppm);
-
-    assert!(progress_bar.is_finished());
+    render_inner(world, camera, &mut image_ppm);
     println!("Render finished!");
 
     let time_now = SystemTime::now();
@@ -47,7 +43,7 @@ pub fn render(mut world: HittableList, mut camera: Camera) {
     render_file.write_all(image_ppm.as_bytes()).unwrap();
 }
 
-fn render_inner_thread(world: Arc<HittableList>, camera: Arc<Camera>, x: i32, y: i32) -> Color {
+fn render_inner_thread(world: &HittableList, camera: &Camera, x: i32, y: i32) -> Color {
     let mut sum_texel_color: Color = Color::new(0.0, 0.0, 0.0, 1.0);
     for _aa in 0..camera.samples_per_pixel {
         let ray: Ray = camera.get_ray(x, y);
@@ -59,87 +55,66 @@ fn render_inner_thread(world: Arc<HittableList>, camera: Arc<Camera>, x: i32, y:
     sum_texel_color
 }
 
-pub fn render_inner(
-    mut world: HittableList,
-    mut camera: Camera,
-    progress_bar: &mut ProgressBar,
-    image_string: &mut String,
-) {
-    let owned_camera = camera;
-    let owned_world = world;
-    let (image_width, image_height) = owned_camera.get_image_xy();
+pub fn render_inner(world: &HittableList, camera: &Camera, image_string: &mut String) {
+    let (image_width, image_height) = camera.get_image_xy();
+    let total_ray_pixel_tasks: i32 = image_width * image_height;
+    let mut progress_bar: ProgressBar =
+        ProgressBar::new((image_width * image_height) as f64, 20 as usize);
 
     const MULTITHREAD_ENABLE: bool = true;
     if MULTITHREAD_ENABLE {
-        let num_threads: i32 = image_width * image_height;
-        let mut all_thread_handles: Vec<JoinHandle<(Color)>> =
-            Vec::with_capacity(num_threads as usize);
+        thread::scope(|s| {
+            let num_threads_to_spawn: i32 = total_ray_pixel_tasks;
+            let mut all_thread_handles: Vec<ScopedJoinHandle<Color>> =
+                Vec::with_capacity(num_threads_to_spawn as usize);
 
-        let world_shared: Arc<HittableList> = Arc::new(owned_world);
-        let camera_shared: Arc<Camera> = Arc::new(owned_camera);
-
-        for i in 0..num_threads {
-            let thread_world = world_shared.clone();
-            let thread_camera = camera_shared.clone();
-            let thread_id = i;
-            let thread_x: i32 = thread_id % image_width;
-            let thread_y = thread_id / image_width;
-            let thread_handle = thread::spawn(move || {
-                let local_camera_shared = thread_camera;
-                let local_world_shared = thread_world;
-                let texel_color = render_inner_thread(
-                    local_world_shared,
-                    local_camera_shared,
-                    thread_x,
-                    thread_y,
-                );
-                return texel_color;
-            });
-            all_thread_handles.push(thread_handle);
-        }
-
-        let mut thread_results: Vec<Color> = Vec::new();
-        for thread_handle in all_thread_handles {
-            let thread_result = thread_handle.join().unwrap();
-            thread_results.push(thread_result);
-        }
-
-        for result in thread_results {
-            write_color(image_string, result, camera_shared.samples_per_pixel);
-            // Todo: fix progressbar increment for MT
-            progress_bar.inc();
-        }
-
-        camera = Arc::<Camera>::into_inner(camera_shared).unwrap().into();
-        world = Arc::<HittableList>::into_inner(world_shared)
-            .unwrap()
-            .into();
-
-        return;
-    }
-
-    for y in 0..image_height {
-        for x in 0..image_width {
-            let mut sum_texel_color: Color = Color::new(0.0, 0.0, 0.0, 1.0);
-            for _aa in 0..owned_camera.samples_per_pixel {
-                let ray: Ray = owned_camera.get_ray(x, y);
-
-                let texel_color: Color =
-                    ray_color(&ray, owned_camera.max_ray_per_pixel, &owned_world);
-                sum_texel_color += texel_color;
+            for i in 0..num_threads_to_spawn {
+                let thread_id = i;
+                let thread_x: i32 = thread_id % image_width;
+                let thread_y = thread_id / image_width;
+                let thread_handle = s.spawn(move || {
+                    let texel_color = render_inner_thread(world, camera, thread_x, thread_y);
+                    return texel_color;
+                });
+                all_thread_handles.push(thread_handle);
             }
-            write_color(
-                image_string,
-                sum_texel_color,
-                owned_camera.samples_per_pixel,
-            );
 
-            if (x + y * image_width) % progress_bar.calc_increment() as i32 == 0 {
-                progress_bar.print_progress_percent();
-                progress_bar.inc();
+            let mut thread_results: Vec<Color> = Vec::new();
+            for thread_handle in all_thread_handles {
+                let thread_result = thread_handle.join().unwrap();
+                thread_results.push(thread_result);
+            }
+
+            for (i, result) in thread_results.iter().enumerate() {
+                write_color(image_string, *result, camera.samples_per_pixel);
+
+                if i as i32 % progress_bar.calc_increment() as i32 == 0 {
+                    progress_bar.print_progress_percent();
+                    progress_bar.inc();
+                }
+            }
+        });
+    } else {
+        for y in 0..image_height {
+            for x in 0..image_width {
+                let mut sum_texel_color: Color = Color::new(0.0, 0.0, 0.0, 1.0);
+                for _aa in 0..camera.samples_per_pixel {
+                    let ray: Ray = camera.get_ray(x, y);
+
+                    let texel_color: Color = ray_color(&ray, camera.max_ray_per_pixel, &world);
+                    sum_texel_color += texel_color;
+                }
+                write_color(image_string, sum_texel_color, camera.samples_per_pixel);
+
+                if (x + y * image_width) % progress_bar.calc_increment() as i32 == 0 {
+                    progress_bar.print_progress_percent();
+                    progress_bar.inc();
+                }
             }
         }
     }
+
+    assert!(progress_bar.is_finished());
 }
 
 fn write_color(accum_string_file: &mut String, texel_color: Color, samples_per_pixel: i32) {

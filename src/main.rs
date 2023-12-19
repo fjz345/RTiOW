@@ -187,5 +187,5 @@ fn main() {
 
     let mut world = world0;
 
-    render(world, camera);
+    render(&mut world, &mut camera);
 }

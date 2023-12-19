@@ -1,11 +1,11 @@
 pub struct ProgressBar {
     pub progress_max: f64,
-    pub progress_num_steps: i64,
+    pub progress_num_steps: usize,
     progress: f64,
 }
 
 impl ProgressBar {
-    pub fn new(progress_max: f64, progress_num_steps: i64) -> Self {
+    pub fn new(progress_max: f64, progress_num_steps: usize) -> Self {
         ProgressBar {
             progress_max: progress_max,
             progress_num_steps: progress_num_steps,
