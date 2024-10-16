@@ -113,7 +113,6 @@ async fn render_inner_multithread(
     let (image_width, image_height) = camera.get_image_xy();
     let total_ray_pixel_tasks: i32 = image_width * image_height;
 
-    let mut a: RingBuffer<PixelFuture, 20> = RingBuffer::new();
     let mut pixel_futures = Vec::with_capacity((image_height * image_width) as usize);
     for y in 0..image_height {
         for x in 0..image_width {
