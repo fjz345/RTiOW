@@ -48,7 +48,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ringbuffer_usize_test1() {
+    fn test_ringbuffer_usize_equal_push_pop() {
         const RINGBUFFER_SIZE: usize = 10;
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
 
@@ -75,7 +75,7 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn ringbuffer_usize_test2() {
+    fn test_ringbuffer_usize_overflow() {
         const RINGBUFFER_SIZE: usize = 10;
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
 
@@ -101,7 +101,7 @@ mod tests {
     }
 
     #[test]
-    fn ringbuffer_usize_test3() {
+    fn test_ringbuffer_usize_test3() {
         const RINGBUFFER_SIZE: usize = 10;
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
 
@@ -149,7 +149,7 @@ mod tests {
     }
 
     #[test]
-    fn ringbuffer_usize_test4() {
+    fn test_ringbuffer_usize_test4() {
         const RINGBUFFER_SIZE: usize = 10;
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
 
@@ -211,5 +211,13 @@ mod tests {
             pop_counter -= 1;
         }
         assert_eq!(buffer.len(), 5);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_ringbuffer_usize_pop_before_push() {
+        const RINGBUFFER_SIZE: usize = 10;
+        let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
+        buffer.pop();
     }
 }
