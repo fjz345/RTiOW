@@ -54,7 +54,7 @@ impl HitResult {
 
 pub trait Hittable {
     fn hit(&self, ray: &Ray, interval: Interval) -> Option<HitResult>;
-    fn clone_dyn(&self) -> Box<dyn Hittable>;
+    fn clone_dyn(&self) -> Box<dyn Hittable + Sync + Send>;
 }
 
 impl Clone for Box<dyn Hittable> {
@@ -72,7 +72,7 @@ pub struct Sphere {
 }
 
 impl Hittable for Sphere {
-    fn clone_dyn(&self) -> Box<dyn Hittable> {
+    fn clone_dyn(&self) -> Box<dyn Hittable + Sync + Send> {
         Box::new(self.clone())
     }
 
@@ -122,7 +122,7 @@ pub struct Plane {
 }
 
 impl Hittable for Plane {
-    fn clone_dyn(&self) -> Box<dyn Hittable> {
+    fn clone_dyn(&self) -> Box<dyn Hittable + Sync + Send> {
         Box::new(self.clone())
     }
 
@@ -157,6 +157,17 @@ impl Hittable for Plane {
 
 pub struct HittableList {
     pub list: Vec<Box<dyn Hittable + Sync + Send>>,
+}
+
+impl Clone for HittableList {
+    fn clone(&self) -> Self {
+        let mut copy_list: Vec<Box<dyn Hittable + Sync + Send>> = Vec::new();
+        for li in self.list.iter() {
+            let copy_hittable = li.clone_dyn();
+            copy_list.push(copy_hittable);
+        }
+        Self { list: copy_list }
+    }
 }
 
 impl HittableList {

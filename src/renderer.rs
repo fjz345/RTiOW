@@ -1,8 +1,15 @@
+use crate::renderer::thread::Builder;
+use futures::{future::join_all, join};
 use std::{
+    borrow::{Borrow, BorrowMut},
     cell::RefCell,
     fs::File,
+    future::Future,
     io::Write,
-    sync::Arc,
+    ops::Deref,
+    result,
+    sync::{Arc, Mutex},
+    task::{Poll, Waker},
     thread::{self, JoinHandle, ScopedJoinHandle},
     time::SystemTime,
 };
@@ -55,6 +62,76 @@ fn render_inner_thread(world: &HittableList, camera: &Camera, x: i32, y: i32) ->
     sum_texel_color
 }
 
+fn render_inner_multithread_old(
+    world: &HittableList,
+    camera: &Camera,
+    image_string: &mut String,
+    progress_bar: &mut ProgressBar,
+) {
+    let (image_width, image_height) = camera.get_image_xy();
+    let total_ray_pixel_tasks: i32 = image_width * image_height;
+
+    thread::scope(|s: &thread::Scope<'_, '_>| {
+        let num_threads_to_spawn: i32 = total_ray_pixel_tasks;
+        let mut all_thread_handles: Vec<ScopedJoinHandle<Color>> =
+            Vec::with_capacity(num_threads_to_spawn as usize);
+
+        for i in 0..num_threads_to_spawn {
+            let thread_id = i;
+            let thread_x: i32 = thread_id % image_width;
+            let thread_y = thread_id / image_width;
+            let thread_handle = s.spawn(move || {
+                let texel_color = render_inner_thread(world, camera, thread_x, thread_y);
+                return texel_color;
+            });
+            all_thread_handles.push(thread_handle);
+        }
+
+        let mut thread_results: Vec<Color> = Vec::new();
+        for thread_handle in all_thread_handles {
+            let thread_result = thread_handle.join().unwrap();
+            thread_results.push(thread_result);
+        }
+
+        for (i, result) in thread_results.iter().enumerate() {
+            write_color(image_string, *result / camera.samples_per_pixel as f32);
+
+            if i as i32 % progress_bar.calc_increment() as i32 == 0 {
+                progress_bar.print_progress_percent();
+                progress_bar.inc();
+            }
+        }
+    });
+}
+
+async fn render_inner_multithread(
+    world: Arc<HittableList>,
+    camera: Arc<Camera>,
+    image_string: &mut String,
+    progress_bar: &mut ProgressBar,
+) {
+    let (image_width, image_height) = camera.get_image_xy();
+    let total_ray_pixel_tasks: i32 = image_width * image_height;
+
+    let mut pixel_futures = Vec::with_capacity((image_height * image_width) as usize);
+    for y in 0..image_height {
+        for x in 0..image_width {
+            let pixel_future = PixelFuture::new(x, y, world.clone(), camera.clone());
+            pixel_futures.push(pixel_future);
+        }
+    }
+
+    let results = join_all(pixel_futures).await;
+    for (i, res) in results.iter().enumerate() {
+        write_color(image_string, *res);
+
+        if i as i32 % progress_bar.calc_increment() as i32 == 0 {
+            progress_bar.print_progress_percent();
+            progress_bar.inc();
+        }
+    }
+}
+
 pub fn render_inner(world: &HittableList, camera: &Camera, image_string: &mut String) {
     let (image_width, image_height) = camera.get_image_xy();
     let total_ray_pixel_tasks: i32 = image_width * image_height;
@@ -63,37 +140,29 @@ pub fn render_inner(world: &HittableList, camera: &Camera, image_string: &mut St
 
     const MULTITHREAD_ENABLE: bool = true;
     if MULTITHREAD_ENABLE {
-        thread::scope(|s: &thread::Scope<'_, '_>| {
-            let num_threads_to_spawn: i32 = total_ray_pixel_tasks;
-            let mut all_thread_handles: Vec<ScopedJoinHandle<Color>> =
-                Vec::with_capacity(num_threads_to_spawn as usize);
+        const OLD_MULTITHREAD_CODE: bool = false;
+        if OLD_MULTITHREAD_CODE {
+            render_inner_multithread_old(world, camera, image_string, &mut progress_bar);
+        } else {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
 
-            for i in 0..num_threads_to_spawn {
-                let thread_id = i;
-                let thread_x: i32 = thread_id % image_width;
-                let thread_y = thread_id / image_width;
-                let thread_handle = s.spawn(move || {
-                    let texel_color = render_inner_thread(world, camera, thread_x, thread_y);
-                    return texel_color;
-                });
-                all_thread_handles.push(thread_handle);
-            }
-
-            let mut thread_results: Vec<Color> = Vec::new();
-            for thread_handle in all_thread_handles {
-                let thread_result = thread_handle.join().unwrap();
-                thread_results.push(thread_result);
-            }
-
-            for (i, result) in thread_results.iter().enumerate() {
-                write_color(image_string, *result, camera.samples_per_pixel);
-
-                if i as i32 % progress_bar.calc_increment() as i32 == 0 {
-                    progress_bar.print_progress_percent();
-                    progress_bar.inc();
-                }
-            }
-        });
+            let world_copy = world.clone();
+            let camera_copy = camera.clone();
+            let res = rt.block_on(async {
+                let world_arc_copy = Arc::new(world_copy);
+                let camera_arc_copy = Arc::new(camera_copy);
+                render_inner_multithread(
+                    world_arc_copy,
+                    camera_arc_copy,
+                    image_string,
+                    &mut progress_bar,
+                )
+                .await
+            });
+        }
     } else {
         for y in 0..image_height {
             for x in 0..image_width {
@@ -104,7 +173,10 @@ pub fn render_inner(world: &HittableList, camera: &Camera, image_string: &mut St
                     let texel_color: Color = ray_color(&ray, camera.max_ray_per_pixel, &world);
                     sum_texel_color += texel_color;
                 }
-                write_color(image_string, sum_texel_color, camera.samples_per_pixel);
+                write_color(
+                    image_string,
+                    sum_texel_color / camera.samples_per_pixel as f32,
+                );
 
                 if (x + y * image_width) % progress_bar.calc_increment() as i32 == 0 {
                     progress_bar.print_progress_percent();
@@ -117,13 +189,12 @@ pub fn render_inner(world: &HittableList, camera: &Camera, image_string: &mut St
     assert!(progress_bar.is_finished());
 }
 
-fn write_color(accum_string_file: &mut String, texel_color: Color, samples_per_pixel: i32) {
-    let scale_factor = 1.0 / samples_per_pixel as f32;
+fn write_color(accum_string_file: &mut String, texel_color: Color) {
     let mut scaled_texel_color = Color {
         color: palette::rgb::Rgb {
-            red: texel_color.red * scale_factor,
-            green: texel_color.green * scale_factor,
-            blue: texel_color.blue * scale_factor,
+            red: texel_color.red,
+            green: texel_color.green,
+            blue: texel_color.blue,
             standard: std::marker::PhantomData,
         },
         alpha: 1.0,
@@ -176,4 +247,93 @@ fn ray_color(ray: &Ray, depth: i32, world: &HittableList) -> Color {
     let unit_dir = ray.direction.normalize();
     let a = (unit_dir.y + 1.0) * 0.5;
     Color::new(1.0, 1.0, 1.0, 1.0) * (1.0 - a) + Color::new(0.5, 0.7, 1.0, 1.0) * a
+}
+
+struct PixelFutureState {
+    pixel_result: Option<Color>,
+    pixel_x: i32,
+    pixel_y: i32,
+    world: Arc<HittableList>,
+    camera: Arc<Camera>,
+    /// The waker for the task that `TimerFuture` is running on.
+    /// The thread can use this after setting `completed = true` to tell
+    /// `TimerFuture`'s task to wake up, see that `completed = true`, and
+    /// move forward.
+    waker: Option<Waker>,
+}
+
+pub struct PixelFuture {
+    shared_state: Arc<Mutex<PixelFutureState>>,
+}
+
+impl Future for PixelFuture {
+    type Output = Color;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        // Look at the shared state to see if the timer has already completed.
+        let mut shared_state = self.shared_state.lock().unwrap();
+        if shared_state.pixel_result.is_some() {
+            Poll::Ready(shared_state.pixel_result.unwrap())
+        } else {
+            // Set waker so that the thread can wake up the current task
+            // when the timer has completed, ensuring that the future is polled
+            // again and sees that `completed = true`.
+            //
+            // It's tempting to do this once rather than repeatedly cloning
+            // the waker each time. However, the `TimerFuture` can move between
+            // tasks on the executor, which could cause a stale waker pointing
+            // to the wrong task, preventing `TimerFuture` from waking up
+            // correctly.
+            //
+            // N.B. it's possible to check for this using the `Waker::will_wake`
+            // function, but we omit that here to keep things simple.
+            shared_state.waker = Some(cx.waker().clone());
+            Poll::Pending
+        }
+    }
+}
+
+impl PixelFuture {
+    pub fn new(pixel_x: i32, pixel_y: i32, world: Arc<HittableList>, camera: Arc<Camera>) -> Self {
+        let shared_state = Arc::new(Mutex::new(PixelFutureState {
+            pixel_result: None,
+            waker: None,
+            pixel_x,
+            pixel_y,
+            world,
+            camera,
+        }));
+
+        // Spawn the new thread
+        let thread_shared_state = shared_state.clone();
+        thread::spawn(move || {
+            let mut shared_state = thread_shared_state.lock().unwrap();
+
+            let mut sum_texel_color: Color = Color::new(0.0, 0.0, 0.0, 1.0);
+            for _aa in 0..shared_state.camera.samples_per_pixel {
+                let ray: Ray = shared_state
+                    .camera
+                    .get_ray(shared_state.pixel_x, shared_state.pixel_y);
+                let color: Color = ray_color(
+                    &ray,
+                    shared_state.camera.max_ray_per_pixel,
+                    shared_state.world.borrow(),
+                );
+                sum_texel_color += color;
+            }
+
+            // Signal that the timer has completed and wake up the last
+            // task on which the future was polled, if one exists.
+            shared_state.pixel_result =
+                Some(sum_texel_color / shared_state.camera.samples_per_pixel as f32);
+            if let Some(waker) = shared_state.waker.take() {
+                waker.wake()
+            }
+        });
+
+        Self { shared_state }
+    }
 }
