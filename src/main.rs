@@ -25,6 +25,7 @@ mod progress_bar;
 mod random;
 mod ray;
 mod renderer;
+mod ringbuffer;
 
 /* TODO:
 camera direction
