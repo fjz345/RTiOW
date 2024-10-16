@@ -15,7 +15,7 @@ use crate::{
     interval::Interval,
     material::scatter,
     progress_bar::ProgressBar,
-    ray::{HittableList, Ray},
+    ray::{Hittable, HittableList, Ray},
 };
 
 pub fn render(world: &mut HittableList, camera: &mut Camera) {
@@ -37,7 +37,7 @@ pub fn render(world: &mut HittableList, camera: &mut Camera) {
         .expect("Time went backwards");
     println!("Render took: {:?} seconds", since_the_epoch.as_secs_f32());
 
-    let render_file_path = "img/render.ppm";
+    let render_file_path = "../img/render.ppm";
     println!("Saving to file {}...", render_file_path);
     let mut render_file = File::create(render_file_path).unwrap();
     render_file.write_all(image_ppm.as_bytes()).unwrap();
@@ -63,7 +63,7 @@ pub fn render_inner(world: &HittableList, camera: &Camera, image_string: &mut St
 
     const MULTITHREAD_ENABLE: bool = true;
     if MULTITHREAD_ENABLE {
-        thread::scope(|s| {
+        thread::scope(|s: &thread::Scope<'_, '_>| {
             let num_threads_to_spawn: i32 = total_ray_pixel_tasks;
             let mut all_thread_handles: Vec<ScopedJoinHandle<Color>> =
                 Vec::with_capacity(num_threads_to_spawn as usize);

@@ -12,7 +12,7 @@ pub const MATERIAL_LAMBERTIAN: i32 = 1;
 pub const MATERIAL_METAL: i32 = 2;
 pub const MATERIAL_DIELECTRIC: i32 = 3;
 pub const MATERIAL_NUM: i32 = 4;
-pub const EMISSIVE_OFF: bool = true;
+pub const EMISSIVE_OFF: bool = false;
 
 pub fn scatter(
     material_id: i32,
