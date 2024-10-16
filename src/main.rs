@@ -188,5 +188,6 @@ fn main() {
 
     let mut world = world0;
 
-    render(&mut world, &mut camera);
+    let render_file_path = "../img/render_test.ppm";
+    render(&mut world, &mut camera, render_file_path);
 }

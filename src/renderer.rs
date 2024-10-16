@@ -3,9 +3,10 @@ use futures::{future::join_all, join};
 use std::{
     borrow::{Borrow, BorrowMut},
     cell::RefCell,
+    error::Error,
     fs::File,
     future::Future,
-    io::Write,
+    io::{self, Write},
     ops::Deref,
     result,
     sync::{Arc, Mutex},
@@ -25,7 +26,11 @@ use crate::{
     ray::{Hittable, HittableList, Ray},
 };
 
-pub fn render(world: &mut HittableList, camera: &mut Camera) {
+pub fn render(
+    world: &mut HittableList,
+    camera: &mut Camera,
+    render_file_path: &str,
+) -> Result<File, io::Error> {
     camera.initialize();
 
     let (image_width, image_height) = camera.get_image_xy();
@@ -44,10 +49,11 @@ pub fn render(world: &mut HittableList, camera: &mut Camera) {
         .expect("Time went backwards");
     println!("Render took: {:?} seconds", since_the_epoch.as_secs_f32());
 
-    let render_file_path = "../img/render.ppm";
     println!("Saving to file {}...", render_file_path);
-    let mut render_file = File::create(render_file_path).unwrap();
+    let mut render_file = File::create(render_file_path)?;
     render_file.write_all(image_ppm.as_bytes()).unwrap();
+
+    Ok(render_file)
 }
 
 fn render_inner_thread(world: &HittableList, camera: &Camera, x: i32, y: i32) -> Color {
@@ -111,7 +117,6 @@ async fn render_inner_multithread(
     progress_bar: &mut ProgressBar,
 ) {
     let (image_width, image_height) = camera.get_image_xy();
-    let total_ray_pixel_tasks: i32 = image_width * image_height;
 
     let mut pixel_futures = Vec::with_capacity((image_height * image_width) as usize);
     for y in 0..image_height {
@@ -134,7 +139,6 @@ async fn render_inner_multithread(
 
 pub fn render_inner(world: &HittableList, camera: &Camera, image_string: &mut String) {
     let (image_width, image_height) = camera.get_image_xy();
-    let total_ray_pixel_tasks: i32 = image_width * image_height;
     let mut progress_bar: ProgressBar =
         ProgressBar::new((image_width * image_height) as f64, 20 as usize);
 
@@ -335,5 +339,55 @@ impl PixelFuture {
         });
 
         Self { shared_state }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use glam::Vec3;
+    use io::ErrorKind;
+
+    use crate::{setup_world0, setup_world1};
+
+    use super::*;
+
+    #[test]
+    fn test_renderer_render() {
+        let mut camera: Camera = Camera::default();
+        camera.aspect_ratio = 16.0 / 9.0;
+        camera.image_width = 500;
+        camera.fov = 40.0;
+        camera.samples_per_pixel = 10;
+        camera.max_ray_per_pixel = 10;
+        camera.position = Vec3::new(-30.0, 6.0, -20.0);
+        let look_at_position = Vec3::new(0.0, 0.0, 0.0);
+        camera.look_at(look_at_position, Vec3::new(0.0, 1.0, 0.0));
+
+        camera.defocus_angle = 0.6 * 0.5;
+        camera.focus_dist = (camera.position - look_at_position).length();
+
+        let mut world0: HittableList = HittableList::new();
+        setup_world0(&mut world0);
+        let mut world1: HittableList = HittableList::new();
+        setup_world1(&mut world1);
+        world0.merge(world1);
+
+        let mut world = world0;
+
+        let render_file_path = "../img/render.ppm";
+        let result = render(&mut world, &mut camera, render_file_path);
+
+        // Ignore the file errors
+        if result.is_err() {
+            match result.err() {
+                Some(e) => {
+                    let err_kind = e.kind();
+                    if err_kind != ErrorKind::NotFound {
+                        panic!();
+                    }
+                }
+                None => {}
+            }
+        }
     }
 }

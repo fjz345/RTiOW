@@ -1,4 +1,4 @@
-use std::mem;
+use std::mem::{self, MaybeUninit};
 
 #[derive(Debug)]
 pub struct RingBuffer<T, const N: usize> {
@@ -10,7 +10,9 @@ pub struct RingBuffer<T, const N: usize> {
 
 impl<T, const N: usize> RingBuffer<T, N> {
     pub fn new() -> Self {
-        let data = unsafe { mem::zeroed::<[T; N]>() };
+        let mut uninit: MaybeUninit<[T; N]> = MaybeUninit::uninit();
+        uninit.write(unsafe { mem::zeroed() });
+        let data = unsafe { uninit.assume_init() };
         let write_loc = 0;
         let read_loc = 0;
         let max_entries = N;
@@ -45,7 +47,16 @@ impl<T, const N: usize> RingBuffer<T, N> {
 
 #[cfg(test)]
 mod tests {
+    use crate::renderer::PixelFuture;
+
     use super::*;
+
+    #[test]
+    fn test_ringbuffer_usize_unused() {
+        println!("BEFORE");
+        let mut _ringbuffer: RingBuffer<PixelFuture, 160> = RingBuffer::new();
+        println!("AFTER");
+    }
 
     #[test]
     fn test_ringbuffer_usize_equal_push_pop() {
