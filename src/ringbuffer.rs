@@ -1,4 +1,8 @@
-use std::mem::{self, ManuallyDrop, MaybeUninit};
+use std::{
+    mem::{self, ManuallyDrop, MaybeUninit},
+    ops::Index,
+    vec::IntoIter,
+};
 
 #[derive(Debug)]
 pub struct RingBuffer<T, const N: usize> {
@@ -7,6 +11,14 @@ pub struct RingBuffer<T, const N: usize> {
     write_loc: usize,
     read_loc: usize,
     max_entries: usize,
+}
+
+impl<T, const N: usize> Iterator for RingBuffer<T, N> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.pop()
+    }
 }
 
 impl<T, const N: usize> RingBuffer<T, N> {
@@ -29,6 +41,12 @@ impl<T, const N: usize> RingBuffer<T, N> {
         self.write_loc - self.read_loc
     }
 
+    pub fn empty(&mut self) {
+        while self.len() > 1 {
+            self.pop();
+        }
+    }
+
     pub fn push(&mut self, entry: T) {
         assert_eq!(self.len() < self.max_entries, true, "RingBuffer Overflow");
 
@@ -36,15 +54,17 @@ impl<T, const N: usize> RingBuffer<T, N> {
         self.write_loc += 1;
     }
 
-    pub fn pop(&mut self) -> T {
-        assert_eq!(self.len() > 0, true, "RingBuffer Underflow");
+    pub fn pop(&mut self) -> Option<T> {
+        if self.len() <= 0 {
+            return None;
+        }
 
         let data = unsafe {
             mem::transmute_copy(&self.data.assume_init_mut()[self.read_loc % self.max_entries])
         };
 
         self.read_loc += 1;
-        data
+        Some(data)
     }
 }
 
@@ -93,7 +113,7 @@ mod tests {
 
         let mut pop_counter = push_counter;
         while buffer.len() >= 1 {
-            let popped = buffer.pop();
+            let popped = buffer.pop().unwrap();
             println!("Pop: {}", popped);
             pop_counter -= 1;
             assert_eq!(buffer.len(), pop_counter);
@@ -120,7 +140,7 @@ mod tests {
 
         let mut pop_counter = push_counter;
         while buffer.len() >= 1 {
-            let popped = buffer.pop();
+            let popped = buffer.pop().unwrap();
             println!("Pop: {}", popped);
             pop_counter -= 1;
             assert_eq!(buffer.len(), pop_counter);
@@ -146,7 +166,7 @@ mod tests {
 
         let mut pop_counter = push_counter;
         while buffer.len() >= 1 {
-            let popped = buffer.pop();
+            let popped = buffer.pop().unwrap();
             println!("Pop: {}", popped);
             pop_counter -= 1;
             assert_eq!(buffer.len(), pop_counter);
@@ -194,7 +214,7 @@ mod tests {
 
         let mut pop_counter = push_counter;
         while buffer.len() >= 1 {
-            let popped = buffer.pop();
+            let popped = buffer.pop().unwrap();
             println!("Pop: {}", popped);
             pop_counter -= 1;
             assert_eq!(buffer.len(), pop_counter);
@@ -235,7 +255,7 @@ mod tests {
 
         pop_counter = push_counter;
         while pop_counter >= 1 {
-            let popped = buffer.pop();
+            let popped = buffer.pop().unwrap();
             println!("Pop: {}", popped);
             pop_counter -= 1;
         }
@@ -247,6 +267,6 @@ mod tests {
     fn test_ringbuffer_usize_pop_before_push() {
         const RINGBUFFER_SIZE: usize = 10;
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
-        buffer.pop();
+        buffer.pop().unwrap();
     }
 }
