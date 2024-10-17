@@ -1,13 +1,8 @@
-use std::{
-    mem::{self, ManuallyDrop, MaybeUninit},
-    ops::Index,
-    vec::IntoIter,
-};
+use std::mem::{self, MaybeUninit};
 
 #[derive(Debug)]
 pub struct RingBuffer<T, const N: usize> {
     data: MaybeUninit<[T; N]>,
-    // data: [T; N],
     write_loc: usize,
     read_loc: usize,
     max_entries: usize,
@@ -42,7 +37,7 @@ impl<T, const N: usize> RingBuffer<T, N> {
     }
 
     pub fn empty(&mut self) {
-        while self.len() > 1 {
+        while self.len() >= 1 {
             self.pop();
         }
     }
@@ -78,27 +73,27 @@ impl<T, const N: usize> Drop for RingBuffer<T, N> {
 
 #[cfg(test)]
 mod tests {
+    use rand::RngCore;
+
     use crate::renderer::PixelFuture;
 
     use super::*;
 
     #[test]
-    fn test_ringbuffer_usize_unused() {
-        println!("BEFORE");
+    fn test_ringbuffer_unused() {
+        println!("usize BEFORE");
         let mut _ringbuffer: RingBuffer<usize, 160> = RingBuffer::new();
-        println!("AFTER");
-    }
+        println!("usize AFTER");
 
-    #[test]
-    fn test_ringbuffer_pixelfuture_unused() {
-        println!("BEFORE");
+        println!("PixelFuture BEFORE");
         let mut _ringbuffer: RingBuffer<PixelFuture, 160> = RingBuffer::new();
-        println!("AFTER");
+        println!("PixelFuture AFTER");
     }
 
     #[test]
-    fn test_ringbuffer_usize_equal_push_pop() {
+    fn test_ringbuffer_usize() {
         const RINGBUFFER_SIZE: usize = 10;
+        println!("Buffersize: {RINGBUFFER_SIZE}, 0 spot left");
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
 
         const PUSH_NUM: usize = 10;
@@ -118,8 +113,72 @@ mod tests {
             pop_counter -= 1;
             assert_eq!(buffer.len(), pop_counter);
         }
-
         assert_eq!(buffer.len(), 0);
+
+        const RINGBUFFER_SIZE_2: usize = 10;
+        println!("Buffersize: {RINGBUFFER_SIZE_2}, 1 spot left");
+        let mut buffer_2: RingBuffer<usize, RINGBUFFER_SIZE_2> = RingBuffer::new();
+
+        const PUSH_NUM_2: usize = 9;
+        let mut push_counter = 0;
+        while push_counter < PUSH_NUM_2 {
+            let to_push = push_counter;
+            println!("Push: {}", to_push);
+            buffer_2.push(to_push);
+            push_counter += 1;
+            assert_eq!(buffer_2.len(), push_counter);
+        }
+
+        let mut pop_counter = push_counter;
+        while buffer_2.len() >= 1 {
+            let popped = buffer_2.pop().unwrap();
+            println!("Pop: {}", popped);
+            pop_counter -= 1;
+            assert_eq!(buffer_2.len(), pop_counter);
+        }
+
+        assert_eq!(buffer_2.len(), 0);
+
+        const RINGBUFFER_SIZE_3: usize = 1572;
+        println!("Buffersize: {RINGBUFFER_SIZE_3}");
+        let mut buffer_3: RingBuffer<usize, RINGBUFFER_SIZE_3> = RingBuffer::new();
+
+        const NUM_RANDOM_PUSH_POPS: usize = 898;
+        let mut random_bits = [0u8; NUM_RANDOM_PUSH_POPS];
+        rand::thread_rng().fill_bytes(&mut random_bits);
+        let random_elements: [usize; NUM_RANDOM_PUSH_POPS] = [0; NUM_RANDOM_PUSH_POPS];
+        rand::thread_rng().fill_bytes(&mut random_bits);
+
+        let mut counter = 0;
+        for ele in random_elements {
+            let random_bit: bool = random_bits[counter] != 0;
+            if random_bit && buffer_3.len() >= 1 {
+                buffer_3.pop();
+            } else {
+                buffer_3.push(ele);
+            }
+
+            counter += 1;
+        }
+
+        buffer_3.empty();
+        assert_eq!(buffer_3.len(), 0);
+        const PUSH_NUM_3: usize = 5;
+        push_counter = 0;
+        while push_counter < PUSH_NUM_3 {
+            let to_push = push_counter;
+            println!("Push: {}", to_push);
+            buffer_3.push(to_push);
+            push_counter += 1;
+        }
+
+        pop_counter = push_counter;
+        while pop_counter >= 1 {
+            let popped = buffer_3.pop().unwrap();
+            println!("Pop: {}", popped);
+            pop_counter -= 1;
+        }
+        assert_eq!(buffer_3.len(), 0);
     }
 
     #[test]
@@ -150,123 +209,63 @@ mod tests {
     }
 
     #[test]
-    fn test_ringbuffer_usize_test3() {
-        const RINGBUFFER_SIZE: usize = 10;
-        let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
-
-        const PUSH_NUM: usize = 9;
-        let mut push_counter = 0;
-        while push_counter < PUSH_NUM {
-            let to_push = push_counter;
-            println!("Push: {}", to_push);
-            buffer.push(to_push);
-            push_counter += 1;
-            assert_eq!(buffer.len(), push_counter);
-        }
-
-        let mut pop_counter = push_counter;
-        while buffer.len() >= 1 {
-            let popped = buffer.pop().unwrap();
-            println!("Pop: {}", popped);
-            pop_counter -= 1;
-            assert_eq!(buffer.len(), pop_counter);
-        }
-
-        assert_eq!(buffer.len(), 0);
-
-        buffer.push(111);
-        buffer.push(222);
-        buffer.push(333);
-        assert_eq!(buffer.len(), 3);
-
-        buffer.pop();
-        assert_eq!(buffer.len(), 2);
-        buffer.push(444);
-        assert_eq!(buffer.len(), 3);
-        buffer.push(555);
-        assert_eq!(buffer.len(), 4);
-        buffer.pop();
-        buffer.pop();
-        buffer.pop();
-        assert_eq!(buffer.len(), 1);
-
-        buffer.push(666);
-        buffer.push(777);
-        buffer.push(888);
-        buffer.push(999);
-        assert_eq!(buffer.len(), 5);
-    }
-
-    #[test]
-    fn test_ringbuffer_usize_test4() {
-        const RINGBUFFER_SIZE: usize = 10;
-        let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
-
-        const PUSH_NUM: usize = 9;
-        let mut push_counter = 0;
-        while push_counter < PUSH_NUM {
-            let to_push = push_counter;
-            println!("Push: {}", to_push);
-            buffer.push(to_push);
-            push_counter += 1;
-            assert_eq!(buffer.len(), push_counter);
-        }
-
-        let mut pop_counter = push_counter;
-        while buffer.len() >= 1 {
-            let popped = buffer.pop().unwrap();
-            println!("Pop: {}", popped);
-            pop_counter -= 1;
-            assert_eq!(buffer.len(), pop_counter);
-        }
-
-        assert_eq!(buffer.len(), 0);
-
-        buffer.push(111);
-        buffer.push(222);
-        buffer.push(333);
-        assert_eq!(buffer.len(), 3);
-
-        buffer.pop();
-        assert_eq!(buffer.len(), 2);
-        buffer.push(444);
-        assert_eq!(buffer.len(), 3);
-        buffer.push(555);
-        assert_eq!(buffer.len(), 4);
-        buffer.pop();
-        buffer.pop();
-        buffer.pop();
-        assert_eq!(buffer.len(), 1);
-
-        buffer.push(666);
-        buffer.push(777);
-        buffer.push(888);
-        buffer.push(999);
-        assert_eq!(buffer.len(), 5);
-
-        const PUSH_NUM_2: usize = 5;
-        push_counter = 0;
-        while push_counter < PUSH_NUM_2 {
-            let to_push = push_counter;
-            println!("Push: {}", to_push);
-            buffer.push(to_push);
-            push_counter += 1;
-        }
-
-        pop_counter = push_counter;
-        while pop_counter >= 1 {
-            let popped = buffer.pop().unwrap();
-            println!("Pop: {}", popped);
-            pop_counter -= 1;
-        }
-        assert_eq!(buffer.len(), 5);
-    }
-
-    #[test]
     #[should_panic]
     fn test_ringbuffer_usize_pop_before_push() {
         const RINGBUFFER_SIZE: usize = 10;
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
         buffer.pop().unwrap();
+    }
+
+    #[test]
+    fn test_ringbuffer_f32_iterator() {
+        const RINGBUFFER_SIZE: usize = 10;
+        println!("Buffer size {RINGBUFFER_SIZE}: loop enumerate");
+        let mut buffer: RingBuffer<f32, RINGBUFFER_SIZE> = RingBuffer::new();
+
+        buffer.push(32.0);
+        buffer.push(1100.0);
+        buffer.push(13320.0);
+        for (i, f) in buffer.enumerate() {
+            println!("[{i}]: {f}");
+        }
+
+        const RINGBUFFER_SIZE_2: usize = 10;
+        println!("Buffer size {RINGBUFFER_SIZE_2}: into_iter()");
+        let mut buffer: RingBuffer<f32, RINGBUFFER_SIZE_2> = RingBuffer::new();
+
+        buffer.push(32.0);
+        buffer.push(1100.0);
+        buffer.push(13320.0);
+        buffer.push(0.0);
+        let mut iter = buffer.into_iter();
+        iter.next().unwrap();
+        iter.next().unwrap();
+
+        iter.push(0.0);
+        assert_eq!(iter.len(), 3);
+
+        iter.empty();
+        assert_eq!(iter.len(), 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_ringbuffer_f32_underflow() {
+        const RINGBUFFER_SIZE: usize = 10;
+        let mut buffer: RingBuffer<f32, RINGBUFFER_SIZE> = RingBuffer::new();
+
+        buffer.push(32.0);
+        buffer.push(1100.0);
+        buffer.push(13320.0);
+        buffer.push(0.0);
+        let mut iter = buffer.into_iter();
+        let a = iter.next().unwrap();
+        let b = iter.next().unwrap();
+
+        iter.push(0.0);
+        iter.pop().unwrap();
+        iter.pop().unwrap();
+        iter.pop().unwrap();
+        iter.pop().unwrap();
     }
 }
