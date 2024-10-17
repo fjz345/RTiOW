@@ -1,8 +1,9 @@
-use std::mem::{self, MaybeUninit};
+use std::mem::{self, ManuallyDrop, MaybeUninit};
 
 #[derive(Debug)]
 pub struct RingBuffer<T, const N: usize> {
-    data: [T; N],
+    data: MaybeUninit<[T; N]>,
+    // data: [T; N],
     write_loc: usize,
     read_loc: usize,
     max_entries: usize,
@@ -10,15 +11,14 @@ pub struct RingBuffer<T, const N: usize> {
 
 impl<T, const N: usize> RingBuffer<T, N> {
     pub fn new() -> Self {
-        let mut uninit: MaybeUninit<[T; N]> = MaybeUninit::uninit();
-        uninit.write(unsafe { mem::zeroed() });
-        let data = unsafe { uninit.assume_init() };
+        let maybe_uninit_data: MaybeUninit<[T; N]> = MaybeUninit::uninit();
         let write_loc = 0;
         let read_loc = 0;
         let max_entries = N;
 
         Self {
-            data,
+            // data: unsafe { maybe_uninit.assume_init() },
+            data: maybe_uninit_data,
             write_loc,
             read_loc,
             max_entries,
@@ -32,16 +32,27 @@ impl<T, const N: usize> RingBuffer<T, N> {
     pub fn push(&mut self, entry: T) {
         assert_eq!(self.len() < self.max_entries, true, "RingBuffer Overflow");
 
-        self.data[self.write_loc % self.max_entries] = entry;
+        unsafe { self.data.assume_init_mut()[self.write_loc % self.max_entries] = entry };
         self.write_loc += 1;
     }
 
     pub fn pop(&mut self) -> T {
         assert_eq!(self.len() > 0, true, "RingBuffer Underflow");
 
-        let data = unsafe { mem::transmute_copy(&self.data[self.read_loc % self.max_entries]) };
+        let data = unsafe {
+            mem::transmute_copy(&self.data.assume_init_mut()[self.read_loc % self.max_entries])
+        };
+
         self.read_loc += 1;
         data
+    }
+}
+
+impl<T, const N: usize> Drop for RingBuffer<T, N> {
+    fn drop(&mut self) {
+        while self.len() > 1 {
+            drop(self.pop());
+        }
     }
 }
 
@@ -53,6 +64,13 @@ mod tests {
 
     #[test]
     fn test_ringbuffer_usize_unused() {
+        println!("BEFORE");
+        let mut _ringbuffer: RingBuffer<usize, 160> = RingBuffer::new();
+        println!("AFTER");
+    }
+
+    #[test]
+    fn test_ringbuffer_pixelfuture_unused() {
         println!("BEFORE");
         let mut _ringbuffer: RingBuffer<PixelFuture, 160> = RingBuffer::new();
         println!("AFTER");

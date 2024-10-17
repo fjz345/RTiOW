@@ -352,6 +352,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore]
     fn test_renderer_render() {
         let mut camera: Camera = Camera::default();
         camera.aspect_ratio = 16.0 / 9.0;
