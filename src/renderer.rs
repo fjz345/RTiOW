@@ -1,5 +1,5 @@
 use crate::{renderer::thread::Builder, ringbuffer::RingBuffer};
-use futures::{future::join_all, join};
+use futures::{future::join_all, join, poll, stream, FutureExt, StreamExt};
 use std::{
     borrow::{Borrow, BorrowMut},
     cell::RefCell,
@@ -116,23 +116,83 @@ async fn render_inner_multithread(
     image_string: &mut String,
     progress_bar: &mut ProgressBar,
 ) {
+    // let (image_width, image_height) = camera.get_image_xy();
+
+    // let mut pixel_futures = Vec::with_capacity((image_height * image_width) as usize);
+    // for y in 0..image_height {
+    //     for x in 0..image_width {
+    //         let pixel_future = PixelFuture::new(x, y, world.clone(), camera.clone());
+    //         pixel_futures.push(pixel_future);
+    //     }
+    // }
+
+    // let results = join_all(pixel_futures).await;
+    // for (i, res) in results.iter().enumerate() {
+    //     write_color(image_string, *res);
+
+    //     if i as i32 % progress_bar.calc_increment() as i32 == 0 {
+    //         progress_bar.print_progress_percent();
+    //         progress_bar.inc();
+    //     }
+    // }
+
+    // Spawn thread that fills stream
+
     let (image_width, image_height) = camera.get_image_xy();
+    let total_pixel_futures = image_width * image_height;
+    type PixelFutureRingBuffer = RingBuffer<PixelFuture, 160>;
+    let futures_ring_buffer: Arc<Mutex<PixelFutureRingBuffer>> =
+        Arc::new(Mutex::new(PixelFutureRingBuffer::new()));
 
-    let mut pixel_futures = Vec::with_capacity((image_height * image_width) as usize);
-    for y in 0..image_height {
-        for x in 0..image_width {
-            let pixel_future = PixelFuture::new(x, y, world.clone(), camera.clone());
-            pixel_futures.push(pixel_future);
+    let thread_ring_buffer = futures_ring_buffer.clone();
+    std::thread::spawn(move || {
+        let (image_width, image_height) = camera.get_image_xy();
+
+        for y in 0..image_height {
+            for x in 0..image_width {
+                let pixel_future = PixelFuture::new(x, y, world.clone(), camera.clone());
+
+                loop {
+                    let lock = thread_ring_buffer.lock();
+                    let mut ring_buf = lock.unwrap();
+                    if ring_buf.space_left() >= 1 {
+                        ring_buf.push(pixel_future);
+                        break;
+                    }
+                }
+            }
         }
-    }
+    });
 
-    let results = join_all(pixel_futures).await;
-    for (i, res) in results.iter().enumerate() {
-        write_color(image_string, *res);
+    let mut streamed_pixelfuture_counter = 0;
+    while streamed_pixelfuture_counter < total_pixel_futures {
+        let lock = futures_ring_buffer.lock();
+        let mut ring_buf = lock.unwrap();
 
-        if i as i32 % progress_bar.calc_increment() as i32 == 0 {
-            progress_bar.print_progress_percent();
-            progress_bar.inc();
+        let mut num_front_ready: usize = 0;
+        let mut last_was_ready = true;
+        for (i, fut) in ring_buf.iter_mut().enumerate() {
+            let poll_res = poll!(fut);
+            match poll_res {
+                Poll::Ready(_) => {
+                    if last_was_ready {
+                        num_front_ready += 1;
+                    }
+                }
+                Poll::Pending => last_was_ready = false,
+            }
+        }
+
+        for i in 0..num_front_ready {
+            let res = ring_buf.pop_front().unwrap().now_or_never().unwrap();
+
+            streamed_pixelfuture_counter += 1;
+            write_color(image_string, res);
+
+            if i as i32 % progress_bar.calc_increment() as i32 == 0 {
+                progress_bar.print_progress_percent();
+                progress_bar.inc();
+            }
         }
     }
 }
