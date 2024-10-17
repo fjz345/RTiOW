@@ -1,4 +1,10 @@
-use std::mem::{self, MaybeUninit};
+use core::slice;
+use std::{
+    iter::FusedIterator,
+    mem::{self, MaybeUninit},
+    ops::{Index, IndexMut},
+    slice::SliceIndex,
+};
 
 #[derive(Debug)]
 pub struct RingBuffer<T, const N: usize> {
@@ -8,13 +14,29 @@ pub struct RingBuffer<T, const N: usize> {
     max_entries: usize,
 }
 
-impl<T, const N: usize> Iterator for RingBuffer<T, N> {
-    type Item = T;
+// impl<T, const N: usize, Idx> Index<Idx> for RingBuffer<T, N>
+// where
+//     Idx: SliceIndex<[T], Output = T> + Into<usize>,
+// {
+//     type Output = T;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.pop()
-    }
-}
+//     #[inline(always)]
+//     fn index(&self, index: Idx) -> &Self::Output {
+//         let i = index.into() % self.max_entries;
+//         assert!(i >= self.read_loc);
+//         assert!(self.write_loc > i);
+//         let item = &unsafe { self.data.assume_init_ref() }[i];
+//         item
+//     }
+// }
+
+// impl<T, const N: usize> Iterator for RingBuffer<T, N> {
+//     type Item = T;
+
+//     fn next(&mut self) -> Option<Self::Item> {
+//         self.pop()
+//     }
+// }
 
 impl<T, const N: usize> RingBuffer<T, N> {
     pub fn new() -> Self {
@@ -34,6 +56,10 @@ impl<T, const N: usize> RingBuffer<T, N> {
 
     pub fn len(&self) -> usize {
         self.write_loc - self.read_loc
+    }
+
+    pub fn space_left(&self) -> usize {
+        self.max_entries - self.len()
     }
 
     pub fn empty(&mut self) {
@@ -61,6 +87,58 @@ impl<T, const N: usize> RingBuffer<T, N> {
         self.read_loc += 1;
         Some(data)
     }
+
+    pub fn peek(&self) -> Option<&T> {
+        if self.len() <= 0 {
+            return None;
+        }
+
+        let data = unsafe {
+            mem::transmute_copy(&self.data.assume_init_ref()[self.read_loc % self.max_entries])
+        };
+
+        Some(data)
+    }
+
+    #[inline]
+    unsafe fn get_relative_pointer(&self, index: usize) -> *mut T {
+        self.data
+            .as_ptr()
+            .cast_mut()
+            .add(self.write_loc.wrapping_add(index))
+            .cast::<T>()
+    }
+
+    #[inline]
+    pub fn get_relative(&self, index: usize) -> Option<&T> {
+        if index < self.len() {
+            unsafe { Some(&*self.get_relative_pointer(index)) }
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub fn iter(&self) -> Iter<T> {
+        Iter {
+            buffer: unsafe {
+                slice::from_raw_parts(self.data.as_ptr().cast::<T>(), self.max_entries)
+            },
+            len: self.len(),
+            index: self.write_loc,
+        }
+    }
+
+    #[inline]
+    pub fn iter_mut(&mut self) -> IterMut<T> {
+        IterMut {
+            buffer: unsafe {
+                slice::from_raw_parts_mut(self.data.as_mut_ptr().cast::<T>(), self.max_entries)
+            },
+            len: self.len(),
+            index: self.write_loc,
+        }
+    }
 }
 
 impl<T, const N: usize> Drop for RingBuffer<T, N> {
@@ -71,8 +149,153 @@ impl<T, const N: usize> Drop for RingBuffer<T, N> {
     }
 }
 
+pub struct IntoIter<T, const N: usize> {
+    inner: RingBuffer<T, N>,
+}
+
+impl<T, const N: usize> Iterator for IntoIter<T, N> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.pop()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.inner.len(), Some(self.inner.len()))
+    }
+}
+
+pub struct Iter<'a, T: 'a> {
+    buffer: &'a [T],
+    len: usize,
+    index: usize,
+}
+
+impl<'a, T> Iterator for Iter<'a, T>
+where
+    T: 'a,
+{
+    type Item = &'a T;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.len > 0 {
+            let current_index = self.index;
+            self.index = (self.index + 1) & (self.buffer.len() - 1);
+            self.len -= 1;
+
+            unsafe { Some(self.buffer.get_unchecked(current_index)) }
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len, Some(self.len))
+    }
+}
+
+impl<T> ExactSizeIterator for Iter<'_, T> {}
+
+impl<T> FusedIterator for Iter<'_, T> {}
+
+impl<T> Iter<'_, T> {
+    fn as_slices(&self) -> (&[T], &[T]) {
+        if (self.index + self.len) > self.buffer.len() {
+            let remaining_len = self.index + self.len - self.buffer.len();
+            (&self.buffer[self.index..], &self.buffer[..remaining_len])
+        } else {
+            (&self.buffer[self.index..self.index + self.len], &[])
+        }
+    }
+}
+
+pub struct IterMut<'a, T: 'a> {
+    buffer: &'a mut [T],
+    len: usize,
+    index: usize,
+}
+
+impl<T> IterMut<'_, T> {
+    fn as_slices(&self) -> (&[T], &[T]) {
+        if (self.index + self.len) > self.buffer.len() {
+            let remaining_len = self.index + self.len - self.buffer.len();
+            (&self.buffer[self.index..], &self.buffer[..remaining_len])
+        } else {
+            (&self.buffer[self.index..self.index + self.len], &[])
+        }
+    }
+}
+
+impl<'a, T> Iterator for IterMut<'a, T>
+where
+    T: 'a,
+{
+    type Item = &'a mut T;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.len > 0 {
+            let current_index = self.index;
+            self.index = (self.index + 1) & (self.buffer.len() - 1);
+            self.len -= 1;
+
+            unsafe {
+                let elem = self.buffer.get_unchecked_mut(current_index);
+                // and now for some black magic
+                // the std stuff does this too, but afaik this breaks the borrow checker
+                Some(&mut *(elem as *mut T))
+            }
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len, Some(self.len))
+    }
+}
+
+impl<T> ExactSizeIterator for IterMut<'_, T> {}
+
+impl<T> FusedIterator for IterMut<'_, T> {}
+
+impl<T, const N: usize> IntoIterator for RingBuffer<T, N> {
+    type Item = T;
+    type IntoIter = IntoIter<T, N>;
+
+    /// Consumes the `RingBuffer` into a front-to-back iterator yielding elements by
+    /// value.
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter { inner: self }
+    }
+}
+
+impl<'a, T, const N: usize> IntoIterator for &'a RingBuffer<T, N> {
+    type Item = &'a T;
+    type IntoIter = Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a, T, const N: usize> IntoIterator for &'a mut RingBuffer<T, N> {
+    type Item = &'a mut T;
+    type IntoIter = IterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use futures::{stream, StreamExt};
     use rand::RngCore;
 
     use crate::renderer::PixelFuture;
@@ -95,6 +318,8 @@ mod tests {
         const RINGBUFFER_SIZE: usize = 10;
         println!("Buffersize: {RINGBUFFER_SIZE}, 0 spot left");
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
+
+        assert_eq!(buffer.space_left(), RINGBUFFER_SIZE);
 
         const PUSH_NUM: usize = 10;
         let mut push_counter: usize = 0;
@@ -128,6 +353,8 @@ mod tests {
             push_counter += 1;
             assert_eq!(buffer_2.len(), push_counter);
         }
+
+        assert_eq!(buffer_2.space_left(), 1);
 
         let mut pop_counter = push_counter;
         while buffer_2.len() >= 1 {
@@ -225,7 +452,7 @@ mod tests {
         buffer.push(32.0);
         buffer.push(1100.0);
         buffer.push(13320.0);
-        for (i, f) in buffer.enumerate() {
+        for (i, f) in buffer.iter().enumerate() {
             println!("[{i}]: {f}");
         }
 
@@ -237,15 +464,21 @@ mod tests {
         buffer.push(1100.0);
         buffer.push(13320.0);
         buffer.push(0.0);
-        let mut iter = buffer.into_iter();
-        iter.next().unwrap();
-        iter.next().unwrap();
 
-        iter.push(0.0);
-        assert_eq!(iter.len(), 3);
+        {
+            let mut iter = buffer.iter();
+            let a = iter.next().unwrap();
+            let b = iter.next().unwrap();
+            let b = iter.next().unwrap();
+            let b = iter.next().unwrap();
+        }
 
-        iter.empty();
-        assert_eq!(iter.len(), 0);
+        buffer.push(32.0);
+        buffer.push(1100.0);
+        buffer.push(13320.0);
+        buffer.push(0.0);
+
+        buffer.get_relative(buffer.len() - 1).unwrap();
     }
 
     #[test]
@@ -258,14 +491,58 @@ mod tests {
         buffer.push(1100.0);
         buffer.push(13320.0);
         buffer.push(0.0);
-        let mut iter = buffer.into_iter();
-        let a = iter.next().unwrap();
-        let b = iter.next().unwrap();
+        {
+            let mut iter = buffer.iter();
+            let a = iter.next().unwrap();
+            let b = iter.next().unwrap();
+            let b = iter.next().unwrap();
+            let b = iter.next().unwrap();
+            let b = iter.next().unwrap();
+        }
+    }
 
-        iter.push(0.0);
-        iter.pop().unwrap();
-        iter.pop().unwrap();
-        iter.pop().unwrap();
-        iter.pop().unwrap();
+    #[test]
+    fn test_ringbuffer_usize_stream() {
+        const RINGBUFFER_SIZE: usize = 10;
+        let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
+        for i in 0..5 {
+            buffer.push(i);
+            assert_eq!(buffer.len(), i + 1);
+        }
+        assert_eq!(buffer.len(), 5);
+
+        // let stream_vec = stream::iter(vec![17, 19]);
+        // let a = stream_vec.collect::<Vec<i32>>();
+
+        let stream = stream::iter(buffer);
+    }
+
+    #[test]
+    fn test_ringbuffer_relative() {
+        const RINGBUFFER_SIZE: usize = 10;
+        let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
+        for i in 0..120 {
+            if buffer.space_left() <= 0 {
+                buffer.empty();
+            }
+            buffer.push(i);
+        }
+
+        let a = buffer.get_relative(9).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_ringbuffer_relative_should_panic() {
+        const RINGBUFFER_SIZE: usize = 10;
+        let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
+        for i in 0..123 {
+            if buffer.space_left() <= 0 {
+                buffer.empty();
+            }
+            buffer.push(i);
+        }
+
+        buffer.get_relative(3).unwrap();
     }
 }
