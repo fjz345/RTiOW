@@ -11,7 +11,7 @@ pub struct RingBuffer<T, const N: usize> {
     data: MaybeUninit<[T; N]>,
     write_loc: usize,
     read_loc: usize,
-    max_entries: usize,
+    capacity: usize,
 }
 
 // impl<T, const N: usize, Idx> Index<Idx> for RingBuffer<T, N>
@@ -50,7 +50,7 @@ impl<T, const N: usize> RingBuffer<T, N> {
             data: maybe_uninit_data,
             write_loc,
             read_loc,
-            max_entries,
+            capacity: max_entries,
         }
     }
 
@@ -58,43 +58,47 @@ impl<T, const N: usize> RingBuffer<T, N> {
         self.write_loc - self.read_loc
     }
 
-    pub fn space_left(&self) -> usize {
-        self.max_entries - self.len()
+    pub fn is_empty(&self) -> bool {
+        self.len() <= 0
     }
 
-    pub fn empty(&mut self) {
+    pub fn space_left(&self) -> usize {
+        self.capacity - self.len()
+    }
+
+    pub fn clear(&mut self) {
         while self.len() >= 1 {
-            self.pop();
+            self.pop_front();
         }
     }
 
     pub fn push(&mut self, entry: T) {
-        assert_eq!(self.len() < self.max_entries, true, "RingBuffer Overflow");
+        assert_eq!(self.len() < self.capacity, true, "RingBuffer Overflow");
 
-        unsafe { self.data.assume_init_mut()[self.write_loc % self.max_entries] = entry };
+        unsafe { self.data.assume_init_mut()[self.write_loc % self.capacity] = entry };
         self.write_loc += 1;
     }
 
-    pub fn pop(&mut self) -> Option<T> {
+    pub fn pop_front(&mut self) -> Option<T> {
         if self.len() <= 0 {
             return None;
         }
 
         let data = unsafe {
-            mem::transmute_copy(&self.data.assume_init_mut()[self.read_loc % self.max_entries])
+            mem::transmute_copy(&self.data.assume_init_mut()[self.read_loc % self.capacity])
         };
 
         self.read_loc += 1;
         Some(data)
     }
 
-    pub fn peek(&self) -> Option<&T> {
+    pub fn peek_front(&self) -> Option<&T> {
         if self.len() <= 0 {
             return None;
         }
 
         let data = unsafe {
-            mem::transmute_copy(&self.data.assume_init_ref()[self.read_loc % self.max_entries])
+            mem::transmute_copy(&self.data.assume_init_ref()[self.read_loc % self.capacity])
         };
 
         Some(data)
@@ -121,9 +125,7 @@ impl<T, const N: usize> RingBuffer<T, N> {
     #[inline]
     pub fn iter(&self) -> Iter<T> {
         Iter {
-            buffer: unsafe {
-                slice::from_raw_parts(self.data.as_ptr().cast::<T>(), self.max_entries)
-            },
+            buffer: unsafe { slice::from_raw_parts(self.data.as_ptr().cast::<T>(), self.capacity) },
             len: self.len(),
             index: self.write_loc,
         }
@@ -133,7 +135,7 @@ impl<T, const N: usize> RingBuffer<T, N> {
     pub fn iter_mut(&mut self) -> IterMut<T> {
         IterMut {
             buffer: unsafe {
-                slice::from_raw_parts_mut(self.data.as_mut_ptr().cast::<T>(), self.max_entries)
+                slice::from_raw_parts_mut(self.data.as_mut_ptr().cast::<T>(), self.capacity)
             },
             len: self.len(),
             index: self.write_loc,
@@ -144,7 +146,7 @@ impl<T, const N: usize> RingBuffer<T, N> {
 impl<T, const N: usize> Drop for RingBuffer<T, N> {
     fn drop(&mut self) {
         while self.len() > 1 {
-            drop(self.pop());
+            drop(self.pop_front());
         }
     }
 }
@@ -158,7 +160,7 @@ impl<T, const N: usize> Iterator for IntoIter<T, N> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.pop()
+        self.inner.pop_front()
     }
 
     #[inline]
@@ -333,7 +335,7 @@ mod tests {
 
         let mut pop_counter = push_counter;
         while buffer.len() >= 1 {
-            let popped = buffer.pop().unwrap();
+            let popped = buffer.pop_front().unwrap();
             println!("Pop: {}", popped);
             pop_counter -= 1;
             assert_eq!(buffer.len(), pop_counter);
@@ -358,7 +360,7 @@ mod tests {
 
         let mut pop_counter = push_counter;
         while buffer_2.len() >= 1 {
-            let popped = buffer_2.pop().unwrap();
+            let popped = buffer_2.pop_front().unwrap();
             println!("Pop: {}", popped);
             pop_counter -= 1;
             assert_eq!(buffer_2.len(), pop_counter);
@@ -380,7 +382,7 @@ mod tests {
         for ele in random_elements {
             let random_bit: bool = random_bits[counter] != 0;
             if random_bit && buffer_3.len() >= 1 {
-                buffer_3.pop();
+                buffer_3.pop_front();
             } else {
                 buffer_3.push(ele);
             }
@@ -388,7 +390,7 @@ mod tests {
             counter += 1;
         }
 
-        buffer_3.empty();
+        buffer_3.clear();
         assert_eq!(buffer_3.len(), 0);
         const PUSH_NUM_3: usize = 5;
         push_counter = 0;
@@ -401,7 +403,7 @@ mod tests {
 
         pop_counter = push_counter;
         while pop_counter >= 1 {
-            let popped = buffer_3.pop().unwrap();
+            let popped = buffer_3.pop_front().unwrap();
             println!("Pop: {}", popped);
             pop_counter -= 1;
         }
@@ -426,7 +428,7 @@ mod tests {
 
         let mut pop_counter = push_counter;
         while buffer.len() >= 1 {
-            let popped = buffer.pop().unwrap();
+            let popped = buffer.pop_front().unwrap();
             println!("Pop: {}", popped);
             pop_counter -= 1;
             assert_eq!(buffer.len(), pop_counter);
@@ -440,7 +442,7 @@ mod tests {
     fn test_ringbuffer_usize_pop_before_push() {
         const RINGBUFFER_SIZE: usize = 10;
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
-        buffer.pop().unwrap();
+        buffer.pop_front().unwrap();
     }
 
     #[test]
@@ -523,7 +525,7 @@ mod tests {
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
         for i in 0..120 {
             if buffer.space_left() <= 0 {
-                buffer.empty();
+                buffer.clear();
             }
             buffer.push(i);
         }
@@ -538,7 +540,7 @@ mod tests {
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
         for i in 0..123 {
             if buffer.space_left() <= 0 {
-                buffer.empty();
+                buffer.clear();
             }
             buffer.push(i);
         }
