@@ -8,7 +8,7 @@ use std::{
 
 #[derive(Debug)]
 pub struct RingBuffer<T, const N: usize> {
-    data: MaybeUninit<[T; N]>,
+    data: [MaybeUninit<T>; N],
     write_loc: usize,
     read_loc: usize,
     capacity: usize,
@@ -40,7 +40,7 @@ pub struct RingBuffer<T, const N: usize> {
 
 impl<T, const N: usize> RingBuffer<T, N> {
     pub fn new() -> Self {
-        let maybe_uninit_data: MaybeUninit<[T; N]> = MaybeUninit::uninit();
+        let maybe_uninit_data: [MaybeUninit<T>; N] = [const { MaybeUninit::<T>::uninit() }; N];
         let write_loc = 0;
         let read_loc = 0;
         let max_entries = N;
@@ -74,7 +74,7 @@ impl<T, const N: usize> RingBuffer<T, N> {
     pub fn push(&mut self, entry: T) {
         assert_eq!(self.len() < self.capacity, true, "RingBuffer Overflow");
 
-        unsafe { self.data.assume_init_mut()[self.write_loc % self.capacity] = entry };
+        self.data[self.write_loc % self.capacity].write(entry);
         self.write_loc += 1;
     }
 
@@ -84,7 +84,7 @@ impl<T, const N: usize> RingBuffer<T, N> {
         }
 
         let data = unsafe {
-            mem::transmute_copy(&self.data.assume_init_mut()[self.read_loc % self.capacity])
+            mem::transmute_copy(&self.data[self.read_loc % self.capacity].assume_init_read())
         };
 
         self.read_loc += 1;
@@ -97,7 +97,7 @@ impl<T, const N: usize> RingBuffer<T, N> {
         }
 
         let data = unsafe {
-            mem::transmute_copy(&self.data.assume_init_ref()[self.read_loc % self.capacity])
+            mem::transmute_copy(&self.data[self.read_loc % self.capacity].assume_init_read())
         };
 
         Some(data)
@@ -210,9 +210,9 @@ where
     }
 }
 
-impl<T> ExactSizeIterator for Iter<'_, T> {}
+// impl<T> ExactSizeIterator for Iter<'_, T> {}
 
-impl<T> FusedIterator for Iter<'_, T> {}
+// impl<T> FusedIterator for Iter<'_, T> {}
 
 pub struct IterMut<'a, T: 'a> {
     buffer: &'a mut [T],
@@ -256,9 +256,9 @@ where
     }
 }
 
-impl<T> ExactSizeIterator for IterMut<'_, T> {}
+// impl<T> ExactSizeIterator for IterMut<'_, T> {}
 
-impl<T> FusedIterator for IterMut<'_, T> {}
+// impl<T> FusedIterator for IterMut<'_, T> {}
 
 impl<T, const N: usize> IntoIterator for RingBuffer<T, N> {
     type Item = T;
@@ -301,7 +301,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[ignore]
     fn test_ringbuffer_unused() {
         println!("usize BEFORE");
         let mut _ringbuffer: RingBuffer<usize, 160> = RingBuffer::new();
@@ -313,7 +312,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_ringbuffer_usize() {
         const RINGBUFFER_SIZE: usize = 10;
         println!("Buffersize: {RINGBUFFER_SIZE}, 0 spot left");
@@ -410,7 +408,6 @@ mod tests {
 
     #[test]
     #[should_panic]
-    #[ignore]
     fn test_ringbuffer_usize_overflow() {
         const RINGBUFFER_SIZE: usize = 10;
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
@@ -438,50 +435,49 @@ mod tests {
 
     #[test]
     #[should_panic]
-    #[ignore]
     fn test_ringbuffer_usize_pop_before_push() {
         const RINGBUFFER_SIZE: usize = 10;
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
         buffer.pop_front().unwrap();
     }
 
-    // #[test]
-    // fn test_ringbuffer_f32_iterator() {
-    //     const RINGBUFFER_SIZE: usize = 10;
-    //     println!("Buffer size {RINGBUFFER_SIZE}: loop enumerate");
-    //     let mut buffer: RingBuffer<Arc<f32>, RINGBUFFER_SIZE> = RingBuffer::new();
+    #[test]
+    fn test_ringbuffer_f32_iterator() {
+        const RINGBUFFER_SIZE: usize = 10;
+        println!("Buffer size {RINGBUFFER_SIZE}: loop enumerate");
+        let mut buffer: RingBuffer<Arc<f32>, RINGBUFFER_SIZE> = RingBuffer::new();
 
-    //     buffer.push(Arc::new(32.0));
-    //     buffer.push(Arc::new(1100.0));
-    //     buffer.push(Arc::new(13320.0));
-    //     for (i, f) in buffer.iter().enumerate() {
-    //         println!("[{i}]: {f}");
-    //     }
+        buffer.push(Arc::new(32.0));
+        buffer.push(Arc::new(1100.0));
+        buffer.push(Arc::new(13320.0));
+        for (i, f) in buffer.iter().enumerate() {
+            println!("[{i}]: {f}");
+        }
 
-    //     const RINGBUFFER_SIZE_2: usize = 10;
-    //     println!("Buffer size {RINGBUFFER_SIZE_2}: into_iter()");
-    //     let mut buffer: RingBuffer<Arc<f32>, RINGBUFFER_SIZE_2> = RingBuffer::new();
+        const RINGBUFFER_SIZE_2: usize = 10;
+        println!("Buffer size {RINGBUFFER_SIZE_2}: into_iter()");
+        let mut buffer: RingBuffer<Arc<f32>, RINGBUFFER_SIZE_2> = RingBuffer::new();
 
-    //     buffer.push(Arc::new(32.0));
-    //     buffer.push(Arc::new(1100.0));
-    //     buffer.push(Arc::new(13320.0));
-    //     buffer.push(Arc::new(0.0));
+        buffer.push(Arc::new(32.0));
+        buffer.push(Arc::new(1100.0));
+        buffer.push(Arc::new(13320.0));
+        buffer.push(Arc::new(0.0));
 
-    //     {
-    //         let mut iter = buffer.iter();
-    //         let a = iter.next().unwrap();
-    //         let b = iter.next().unwrap();
-    //         let b = iter.next().unwrap();
-    //         let b = iter.next().unwrap();
-    //     }
+        {
+            let mut iter = buffer.iter();
+            let a = iter.next().unwrap();
+            let b = iter.next().unwrap();
+            let b = iter.next().unwrap();
+            let b = iter.next().unwrap();
+        }
 
-    //     buffer.push(Arc::new(32.0));
-    //     buffer.push(Arc::new(1100.0));
-    //     buffer.push(Arc::new(13320.0));
-    //     buffer.push(Arc::new(0.0));
+        buffer.push(Arc::new(32.0));
+        buffer.push(Arc::new(1100.0));
+        buffer.push(Arc::new(13320.0));
+        buffer.push(Arc::new(0.0));
 
-    //     buffer.get_relative(buffer.len() - 1).unwrap();
-    // }
+        buffer.get_relative(buffer.len() - 1).unwrap();
+    }
 
     #[test]
     fn test_ringbuffer_f32_underflow() {
@@ -491,36 +487,14 @@ mod tests {
         buffer.push(32.0);
         buffer.push(1100.0);
         buffer.push(13320.0);
-        println!("SPACER");
         buffer.push(0.0);
-        println!("SPACER");
 
         for a in buffer.iter() {
-            println!("SPACER");
-            // println!("{}", a.atan());
-            println!("SPACER");
+            println!("{}", a.atan());
         }
-
-        // const RINGBUFFER_SIZE: usize = 10;
-        // let mut buffer: RingBuffer<f32, RINGBUFFER_SIZE> = RingBuffer::new();
-
-        // buffer.push(32.0);
-        // buffer.push(1100.0);
-        // buffer.push(13320.0);
-        // buffer.push(0.0);
-
-        // {
-        //     let mut iter = buffer.iter();
-        //     let a = iter.next().unwrap();
-        //     let b = iter.next().unwrap();
-        //     let b = iter.next().unwrap();
-        //     let b = iter.next().unwrap();
-        //     let b = iter.next().unwrap();
-        // }
     }
 
     #[test]
-    #[ignore]
     fn test_ringbuffer_f32_arc() {
         const RINGBUFFER_SIZE: usize = 10;
         let mut buffer: RingBuffer<Arc<f32>, RINGBUFFER_SIZE> = RingBuffer::new();
@@ -531,25 +505,8 @@ mod tests {
         buffer.push(Arc::new(0.0));
 
         for a in buffer.iter() {
-            println!("{}", a.atan());
+            println!("{}", a);
         }
-
-        // const RINGBUFFER_SIZE: usize = 10;
-        // let mut buffer: RingBuffer<f32, RINGBUFFER_SIZE> = RingBuffer::new();
-
-        // buffer.push(32.0);
-        // buffer.push(1100.0);
-        // buffer.push(13320.0);
-        // buffer.push(0.0);
-
-        // {
-        //     let mut iter = buffer.iter();
-        //     let a = iter.next().unwrap();
-        //     let b = iter.next().unwrap();
-        //     let b = iter.next().unwrap();
-        //     let b = iter.next().unwrap();
-        //     let b = iter.next().unwrap();
-        // }
     }
 
     #[test]
@@ -561,9 +518,6 @@ mod tests {
             assert_eq!(buffer.len(), i + 1);
         }
         assert_eq!(buffer.len(), 5);
-
-        // let stream_vec = stream::iter(vec![17, 19]);
-        // let a = stream_vec.collect::<Vec<i32>>();
 
         let stream = stream::iter(buffer);
     }
