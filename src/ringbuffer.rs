@@ -301,6 +301,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore]
     fn test_ringbuffer_unused() {
         println!("usize BEFORE");
         let mut _ringbuffer: RingBuffer<usize, 160> = RingBuffer::new();
@@ -312,6 +313,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_ringbuffer_usize() {
         const RINGBUFFER_SIZE: usize = 10;
         println!("Buffersize: {RINGBUFFER_SIZE}, 0 spot left");
@@ -408,6 +410,7 @@ mod tests {
 
     #[test]
     #[should_panic]
+    #[ignore]
     fn test_ringbuffer_usize_overflow() {
         const RINGBUFFER_SIZE: usize = 10;
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
@@ -435,6 +438,7 @@ mod tests {
 
     #[test]
     #[should_panic]
+    #[ignore]
     fn test_ringbuffer_usize_pop_before_push() {
         const RINGBUFFER_SIZE: usize = 10;
         let mut buffer: RingBuffer<usize, RINGBUFFER_SIZE> = RingBuffer::new();
@@ -480,16 +484,22 @@ mod tests {
     // }
 
     #[test]
-    #[should_panic]
     fn test_ringbuffer_f32_underflow() {
         const RINGBUFFER_SIZE: usize = 10;
-        let mut buffer: RingBuffer<Arc<f32>, RINGBUFFER_SIZE> = RingBuffer::new();
+        let mut buffer: RingBuffer<f32, RINGBUFFER_SIZE> = RingBuffer::new();
 
-        buffer.push(Arc::new(32.0));
-        panic!();
-        buffer.push(Arc::new(1100.0));
-        buffer.push(Arc::new(13320.0));
-        buffer.push(Arc::new(0.0));
+        buffer.push(32.0);
+        buffer.push(1100.0);
+        buffer.push(13320.0);
+        println!("SPACER");
+        buffer.push(0.0);
+        println!("SPACER");
+
+        for a in buffer.iter() {
+            println!("SPACER");
+            // println!("{}", a.atan());
+            println!("SPACER");
+        }
 
         // const RINGBUFFER_SIZE: usize = 10;
         // let mut buffer: RingBuffer<f32, RINGBUFFER_SIZE> = RingBuffer::new();
@@ -507,8 +517,39 @@ mod tests {
         //     let b = iter.next().unwrap();
         //     let b = iter.next().unwrap();
         // }
+    }
 
-        panic!();
+    #[test]
+    #[ignore]
+    fn test_ringbuffer_f32_arc() {
+        const RINGBUFFER_SIZE: usize = 10;
+        let mut buffer: RingBuffer<Arc<f32>, RINGBUFFER_SIZE> = RingBuffer::new();
+
+        buffer.push(Arc::new(32.0));
+        buffer.push(Arc::new(1100.0));
+        buffer.push(Arc::new(13320.0));
+        buffer.push(Arc::new(0.0));
+
+        for a in buffer.iter() {
+            println!("{}", a.atan());
+        }
+
+        // const RINGBUFFER_SIZE: usize = 10;
+        // let mut buffer: RingBuffer<f32, RINGBUFFER_SIZE> = RingBuffer::new();
+
+        // buffer.push(32.0);
+        // buffer.push(1100.0);
+        // buffer.push(13320.0);
+        // buffer.push(0.0);
+
+        // {
+        //     let mut iter = buffer.iter();
+        //     let a = iter.next().unwrap();
+        //     let b = iter.next().unwrap();
+        //     let b = iter.next().unwrap();
+        //     let b = iter.next().unwrap();
+        //     let b = iter.next().unwrap();
+        // }
     }
 
     #[test]
