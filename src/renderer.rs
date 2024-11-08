@@ -11,10 +11,10 @@ use std::{
     result,
     sync::{Arc, Mutex},
     task::{Poll, Waker},
-    thread::{self, JoinHandle, ScopedJoinHandle},
-    time::SystemTime,
+    thread::{self, sleep, JoinHandle, ScopedJoinHandle},
+    time::{Duration, SystemTime},
 };
-use tokio::task;
+use tokio::task::{self, yield_now};
 
 use palette::{Clamp, Srgba};
 
@@ -128,6 +128,10 @@ async fn produce_pixelfutures(
                     let pixel_future = PixelFuture::new(x, y, world.clone(), camera.clone());
                     buffer.push(pixel_future);
                     pushed_future = true;
+                    println!("Pushed: x:{x}, y:{y}");
+                } else {
+                    drop(buffer);
+                    yield_now().await;
                 }
             }
         }
@@ -142,42 +146,41 @@ async fn consume_pixelfutures(
 ) {
     let mut count = 0;
     while count < total_pixel_futures {
-        let mut buffer = buffer.lock().await;
         println!("count: {count}");
 
-        while buffer.len() >= 1 {
-            let mut is_future_ready = false;
+        let mut is_future_ready = false;
+        {
+            let buffer = buffer.lock().await;
             if let Some(peek) = buffer.peek_front() {
-                let result_state = peek.shared_state.try_lock();
+                let result_state = peek.shared_state.lock();
                 match result_state {
                     Ok(r) => {
                         if r.pixel_result.is_some() {
                             is_future_ready = true;
                         }
                     }
-                    Err(_) => {
-                        break;
-                    }
+                    _ => {}
                 };
-            }
-
-            if is_future_ready {
-                let res = buffer.pop_front().unwrap().now_or_never().unwrap();
-
-                count += 1;
-                let mut image_string = image_string.lock().await;
-                write_color(&mut image_string, res);
-
-                let mut progress_bar = progress_bar.lock().await;
-                if count as i32 % progress_bar.calc_increment() as i32 == 0 {
-                    progress_bar.print_progress_percent();
-
-                    progress_bar.inc();
-                }
             }
         }
 
-        drop(buffer); // release the lock
+        if is_future_ready {
+            let mut buffer = buffer.lock().await;
+            let res = buffer.pop_front().unwrap().now_or_never().unwrap();
+            count += 1;
+
+            let mut image_string = image_string.lock().await;
+            write_color(&mut image_string, res);
+
+            let mut progress_bar = progress_bar.lock().await;
+            if count as i32 % progress_bar.calc_increment() as i32 == 0 {
+                progress_bar.print_progress_percent();
+
+                progress_bar.inc();
+            }
+        } else {
+            yield_now().await;
+        }
     }
 }
 
