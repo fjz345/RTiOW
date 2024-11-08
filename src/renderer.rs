@@ -249,17 +249,20 @@ async fn render_inner_multithread(
 }
 struct SendWrap(*mut Color);
 unsafe impl Send for SendWrap {}
-pub fn render_inner(
+pub fn render_inner_new_multithread(
     world: &HittableList,
     camera: &Camera,
     image_string: &mut String,
 ) -> Vec<Color> {
-    let num_threads = std::thread::available_parallelism().unwrap().get() - 1;
+    let num_threads = (std::thread::available_parallelism().unwrap().get() - 1).max(1);
     let num_jobs = (camera.image_width * camera.image_height) as usize;
 
     let job_generator = Arc::new(AtomicUsize::new(0));
     let mut write_buffer = Vec::<MaybeUninit<Color>>::with_capacity(num_jobs as usize);
-    let output_arr = write_buffer.as_mut_ptr().cast::<Color>();
+    let output_arr: *mut palette::Alpha<
+        palette::rgb::Rgb<palette::encoding::Linear<palette::encoding::Srgb>>,
+        f32,
+    > = write_buffer.as_mut_ptr().cast::<Color>();
     let world = Arc::new(world.clone());
     let mut jobbers = Vec::new();
     for i in 0..num_threads {
@@ -283,32 +286,22 @@ pub fn render_inner(
     write_buffer
 }
 
-pub fn render_inner2(world: &HittableList, camera: &Camera, image_string: &mut String) {
+pub fn render_inner(world: &HittableList, camera: &Camera, image_string: &mut String) {
     let (image_width, image_height) = camera.get_image_xy();
     let mut progress_bar: ProgressBar =
         ProgressBar::new((image_width * image_height) as f64, 20 as usize);
 
     const MULTITHREAD_ENABLE: bool = true;
     if MULTITHREAD_ENABLE {
-        const OLD_MULTITHREAD_CODE: bool = true;
+        const OLD_MULTITHREAD_CODE: bool = false;
         if OLD_MULTITHREAD_CODE {
             render_inner_multithread_old(world, camera, image_string, &mut progress_bar);
         } else {
-            let world_copy = world.clone();
-            let camera_copy = camera.clone();
-            let world_arc_copy = Arc::new(world_copy);
-            let camera_arc_copy = Arc::new(camera_copy);
+            let render_results = render_inner_new_multithread(world, camera, image_string);
 
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap();
-            rt.block_on(render_inner_multithread(
-                world_arc_copy,
-                camera_arc_copy,
-                image_string,
-                &mut progress_bar,
-            ));
+            for res in render_results {
+                write_color(image_string, res / camera.samples_per_pixel as f32);
+            }
         }
     } else {
         for y in 0..image_height {
@@ -333,7 +326,7 @@ pub fn render_inner2(world: &HittableList, camera: &Camera, image_string: &mut S
         }
     }
 
-    assert!(progress_bar.is_finished());
+    // assert!(progress_bar.is_finished());
 }
 
 fn write_color(accum_string_file: &mut String, texel_color: Color) {
