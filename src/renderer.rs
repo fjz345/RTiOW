@@ -14,6 +14,7 @@ use std::{
     thread::{self, JoinHandle, ScopedJoinHandle},
     time::SystemTime,
 };
+use tokio::task;
 
 use palette::{Clamp, Srgba};
 
@@ -110,127 +111,111 @@ fn render_inner_multithread_old(
     });
 }
 
-fn render_inner_multithread(
+type PixelFutureRingBuffer = RingBuffer<PixelFuture, 3>;
+async fn produce_pixelfutures(
+    buffer: Arc<tokio::sync::Mutex<PixelFutureRingBuffer>>,
+    world: Arc<HittableList>,
+    camera: Arc<Camera>,
+) {
+    let (image_width, image_height) = camera.get_image_xy();
+
+    for y in 0..image_height {
+        for x in 0..image_width {
+            let mut pushed_future: bool = false;
+            while !pushed_future {
+                let mut buffer = buffer.lock().await;
+                if buffer.space_left() >= 1 {
+                    let pixel_future = PixelFuture::new(x, y, world.clone(), camera.clone());
+                    buffer.push(pixel_future);
+                    pushed_future = true;
+                }
+            }
+        }
+    }
+}
+
+async fn consume_pixelfutures(
+    buffer: Arc<tokio::sync::Mutex<PixelFutureRingBuffer>>,
+    total_pixel_futures: usize,
+    image_string: Arc<tokio::sync::Mutex<String>>,
+    progress_bar: Arc<tokio::sync::Mutex<ProgressBar>>,
+) {
+    let mut count = 0;
+    while count < total_pixel_futures {
+        let mut buffer = buffer.lock().await;
+        println!("count: {count}");
+
+        while buffer.len() >= 1 {
+            let mut is_future_ready = false;
+            if let Some(peek) = buffer.peek_front() {
+                let result_state = peek.shared_state.try_lock();
+                match result_state {
+                    Ok(r) => {
+                        if r.pixel_result.is_some() {
+                            is_future_ready = true;
+                        }
+                    }
+                    Err(_) => {
+                        break;
+                    }
+                };
+            }
+
+            if is_future_ready {
+                let res = buffer.pop_front().unwrap().now_or_never().unwrap();
+
+                count += 1;
+                let mut image_string = image_string.lock().await;
+                write_color(&mut image_string, res);
+
+                let mut progress_bar = progress_bar.lock().await;
+                if count as i32 % progress_bar.calc_increment() as i32 == 0 {
+                    progress_bar.print_progress_percent();
+
+                    progress_bar.inc();
+                }
+            }
+        }
+
+        drop(buffer); // release the lock
+    }
+}
+
+async fn render_inner_multithread(
     world: Arc<HittableList>,
     camera: Arc<Camera>,
     image_string: &mut String,
     progress_bar: &mut ProgressBar,
 ) {
     let (image_width, image_height) = camera.get_image_xy();
+    let total_pixel_futures = image_width * image_height;
+    let futures_ring_buffer: Arc<tokio::sync::Mutex<PixelFutureRingBuffer>> =
+        Arc::new(tokio::sync::Mutex::new(PixelFutureRingBuffer::new()));
+    let arc_image_string = Arc::new(tokio::sync::Mutex::new(String::new()));
 
-    type PixelFutureRingBuffer = RingBuffer<PixelFuture, 160>;
-    let futures_ring_buffer: Arc<Mutex<PixelFutureRingBuffer>> =
-        Arc::new(Mutex::new(PixelFutureRingBuffer::new()));
+    let arc_progressbar = Arc::new(tokio::sync::Mutex::new(ProgressBar::new(
+        (image_width * image_height) as f64,
+        20 as usize,
+    )));
 
-    let mut pixel_futures = Vec::with_capacity((image_height * image_width) as usize);
-    for y in 0..image_height {
-        for x in 0..image_width {
-            let pixel_future = PixelFuture::new(x, y, world.clone(), camera.clone());
-            pixel_futures.push(pixel_future);
-        }
-    }
+    let producer_handle = task::spawn(produce_pixelfutures(
+        futures_ring_buffer.clone(),
+        world,
+        camera,
+    ));
+    let consumer_handle = task::spawn(consume_pixelfutures(
+        futures_ring_buffer.clone(),
+        total_pixel_futures as usize,
+        arc_image_string.clone(),
+        arc_progressbar.clone(),
+    ));
 
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
+    let _ = tokio::join!(producer_handle, consumer_handle);
 
-    let results = rt.block_on(async { join_all(pixel_futures).await });
-    for (i, res) in results.iter().enumerate() {
-        write_color(image_string, *res);
-
-        if i as i32 % progress_bar.calc_increment() as i32 == 0 {
-            progress_bar.print_progress_percent();
-            progress_bar.inc();
-        }
-    }
-
-    // Spawn thread that fills stream
-
-    // let (image_width, image_height) = camera.get_image_xy();
-    // let total_pixel_futures = image_width * image_height;
-    // type PixelFutureRingBuffer = RingBuffer<PixelFuture, 160>;
-    // let futures_ring_buffer: Arc<Mutex<PixelFutureRingBuffer>> =
-    //     Arc::new(Mutex::new(PixelFutureRingBuffer::new()));
-
-    // let rt = tokio::runtime::Builder::new_current_thread()
-    //     .enable_all()
-    //     .build()
-    //     .unwrap();
-
-    // let thread_ring_buffer = futures_ring_buffer.clone();
-    // let stream_future = async move {
-    //     println!("stream_future: start");
-    //     for y in 0..image_height {
-    //         for x in 0..image_width {
-    //             let pixel_future = PixelFuture::new(x, y, world.clone(), camera.clone());
-
-    //             loop {
-    //                 println!("stream_future: trying lock...");
-    //                 let lock = thread_ring_buffer.try_lock();
-    //                 println!("stream_future: try_lock");
-    //                 if lock.is_ok() {
-    //                     println!("stream_future: is_ok");
-    //                     let mut ring_buf = lock.unwrap();
-    //                     if ring_buf.space_left() >= 1 {
-    //                         ring_buf.push(pixel_future);
-    //                         println!("Pushed to RingBuf, num: {}", ring_buf.len());
-    //                         break;
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-    // };
-
-    // let process_future = async move {
-    //     let mut streamed_pixelfuture_counter = 0;
-    //     while streamed_pixelfuture_counter < total_pixel_futures {
-    //         println!("process_future: trying lock...");
-    //         let lock = futures_ring_buffer.try_lock();
-    //         println!("process_future: try_lock");
-    //         if lock.is_ok() {
-    //             println!("process_future: lock ok!");
-    //             let mut ring_buf = lock.unwrap();
-
-    //             let mut num_front_ready: usize = 0;
-    //             let mut last_was_ready = true;
-
-    //             println!("process_future: Reading ring buf...");
-    //             for fut in ring_buf.iter() {
-    //                 println!("process_future: Reading pixel future shared state...");
-    //                 let option_res = fut.shared_state.lock().unwrap().pixel_result;
-    //                 println!("process_future: Finished Reading pixel future shared state...");
-
-    //                 match option_res {
-    //                     Some(_) => {
-    //                         if last_was_ready {
-    //                             println!("process_future: RingBuf was ready");
-    //                             num_front_ready += 1;
-    //                         }
-    //                     }
-    //                     None => last_was_ready = false,
-    //                 }
-    //             }
-
-    //             for i in 0..num_front_ready {
-    //                 let res = ring_buf.pop_front().unwrap().now_or_never().unwrap();
-
-    //                 streamed_pixelfuture_counter += 1;
-    //                 println!("writing color...");
-    //                 write_color(image_string, res);
-
-    //                 if i as i32 % progress_bar.calc_increment() as i32 == 0 {
-    //                     progress_bar.print_progress_percent();
-    //                     progress_bar.inc();
-    //                 }
-    //             }
-    //         }
-    //     }
-    // };
-
-    // rt.spawn(stream_future);
-    // rt.block_on(process_future);
+    let arc_image_string = arc_image_string.blocking_lock_owned();
+    let arc_progressbar = arc_progressbar.blocking_lock_owned();
+    *image_string = arc_image_string.to_string();
+    *progress_bar = arc_progressbar.clone();
 }
 
 pub fn render_inner(world: &HittableList, camera: &Camera, image_string: &mut String) {
@@ -248,12 +233,17 @@ pub fn render_inner(world: &HittableList, camera: &Camera, image_string: &mut St
             let camera_copy = camera.clone();
             let world_arc_copy = Arc::new(world_copy);
             let camera_arc_copy = Arc::new(camera_copy);
-            render_inner_multithread(
+
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            rt.block_on(render_inner_multithread(
                 world_arc_copy,
                 camera_arc_copy,
                 image_string,
                 &mut progress_bar,
-            );
+            ));
         }
     } else {
         for y in 0..image_height {

@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct ProgressBar {
     pub progress_max: f64,
     pub progress_num_steps: usize,
