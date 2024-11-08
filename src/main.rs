@@ -169,7 +169,7 @@ fn setup_world1(world: &mut HittableList) {
 fn main() {
     let mut camera: Camera = Camera::default();
     camera.aspect_ratio = 16.0 / 9.0;
-    camera.image_width = 500;
+    camera.image_width = 4096;
     camera.fov = 40.0;
     camera.samples_per_pixel = 10;
     camera.max_ray_per_pixel = 10;
@@ -187,7 +187,8 @@ fn main() {
     world0.merge(world1);
 
     let mut world = world0;
-
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let _rt_guard = rt.enter();
     let render_file_path = "../img/render_test.ppm";
     render(&mut world, &mut camera, render_file_path).unwrap();
 }

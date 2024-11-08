@@ -1,5 +1,5 @@
 use crate::{renderer::thread::Builder, ringbuffer::RingBuffer};
-use futures::{future::join_all, join, poll, stream, FutureExt, StreamExt};
+use futures::{future::join_all, join, poll, stream, FutureExt, SinkExt, StreamExt};
 use std::{
     borrow::{Borrow, BorrowMut},
     cell::RefCell,
@@ -7,9 +7,10 @@ use std::{
     fs::File,
     future::Future,
     io::{self, Write},
+    mem::MaybeUninit,
     ops::Deref,
     result,
-    sync::{Arc, Mutex},
+    sync::{atomic::AtomicUsize, Arc, Mutex},
     task::{Poll, Waker},
     thread::{self, sleep, JoinHandle, ScopedJoinHandle},
     time::{Duration, SystemTime},
@@ -184,6 +185,32 @@ async fn consume_pixelfutures(
     }
 }
 
+fn render_pixels(
+    world: Arc<HittableList>,
+    camera: Camera,
+    job_count: usize,
+    job_generator: Arc<AtomicUsize>,
+    output_arr: *mut Color,
+) {
+    const BATCH_SIZE: usize = 512;
+    loop {
+        let job_start = job_generator.fetch_add(BATCH_SIZE, std::sync::atomic::Ordering::Relaxed);
+        for i in job_start..(job_start + BATCH_SIZE) {
+            if job_count <= i {
+                break;
+            }
+            let x = i as i32 % camera.image_width;
+            let y = i as i32 / camera.image_width;
+            let color = render_inner_thread(&world, &camera, x, y);
+
+            unsafe { output_arr.add(i).write(color) };
+        }
+        if job_start >= job_count {
+            break;
+        }
+    }
+}
+
 async fn render_inner_multithread(
     world: Arc<HittableList>,
     camera: Arc<Camera>,
@@ -220,15 +247,50 @@ async fn render_inner_multithread(
     *image_string = arc_image_string.to_string();
     *progress_bar = arc_progressbar.clone();
 }
+struct SendWrap(*mut Color);
+unsafe impl Send for SendWrap {}
+pub fn render_inner(
+    world: &HittableList,
+    camera: &Camera,
+    image_string: &mut String,
+) -> Vec<Color> {
+    let num_threads = std::thread::available_parallelism().unwrap().get() - 1;
+    let num_jobs = (camera.image_width * camera.image_height) as usize;
 
-pub fn render_inner(world: &HittableList, camera: &Camera, image_string: &mut String) {
+    let job_generator = Arc::new(AtomicUsize::new(0));
+    let mut write_buffer = Vec::<MaybeUninit<Color>>::with_capacity(num_jobs as usize);
+    let output_arr = write_buffer.as_mut_ptr().cast::<Color>();
+    let world = Arc::new(world.clone());
+    let mut jobbers = Vec::new();
+    for i in 0..num_threads {
+        let world = world.clone();
+        let camera: Camera = camera.clone();
+        let output_arr = SendWrap(output_arr);
+        let job_generator = job_generator.clone();
+        jobbers.push(task::spawn_blocking(move || {
+            let output_arr = output_arr;
+            render_pixels(world, camera, num_jobs, job_generator, output_arr.0);
+        }));
+    }
+    println!("waiting..");
+    for jobber in jobbers {
+        tokio::runtime::Handle::current().block_on(jobber).unwrap();
+    }
+    println!("done rendering");
+    unsafe { write_buffer.set_len(num_jobs) };
+    let write_buffer =
+        unsafe { core::mem::transmute::<Vec<MaybeUninit<Color>>, Vec<Color>>(write_buffer) };
+    write_buffer
+}
+
+pub fn render_inner2(world: &HittableList, camera: &Camera, image_string: &mut String) {
     let (image_width, image_height) = camera.get_image_xy();
     let mut progress_bar: ProgressBar =
         ProgressBar::new((image_width * image_height) as f64, 20 as usize);
 
     const MULTITHREAD_ENABLE: bool = true;
     if MULTITHREAD_ENABLE {
-        const OLD_MULTITHREAD_CODE: bool = false;
+        const OLD_MULTITHREAD_CODE: bool = true;
         if OLD_MULTITHREAD_CODE {
             render_inner_multithread_old(world, camera, image_string, &mut progress_bar);
         } else {

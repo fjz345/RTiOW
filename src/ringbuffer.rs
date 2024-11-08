@@ -104,10 +104,9 @@ impl<T, const N: usize> RingBuffer<T, N> {
     }
 
     #[inline]
-    unsafe fn get_relative_pointer(&self, index: usize) -> *mut T {
+    unsafe fn get_relative_pointer(&self, index: usize) -> *const T {
         self.data
             .as_ptr()
-            .cast_mut()
             .add(self.write_loc.wrapping_add(index))
             .cast::<T>()
     }
@@ -116,6 +115,24 @@ impl<T, const N: usize> RingBuffer<T, N> {
     pub fn get_relative(&self, index: usize) -> Option<&T> {
         if index < self.len() {
             unsafe { Some(&*self.get_relative_pointer(index)) }
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    unsafe fn get_relative_pointer_mut(&mut self, index: usize) -> *mut T {
+        self.data
+            .as_ptr()
+            .cast_mut()
+            .add(self.write_loc.wrapping_add(index))
+            .cast::<T>()
+    }
+
+    #[inline]
+    pub fn get_relative_mut(&mut self, index: usize) -> Option<&T> {
+        if index < self.len() {
+            unsafe { Some(&*self.get_relative_pointer_mut(index)) }
         } else {
             None
         }

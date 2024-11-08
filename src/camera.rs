@@ -32,7 +32,7 @@ pub struct Camera {
     pub samples_per_pixel: i32,
     pub max_ray_per_pixel: i32,
 
-    image_height: i32,
+    pub image_height: i32,
     image_size: [i32; 2],
 
     pixel_delta_u: Vec3,
